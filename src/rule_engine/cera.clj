@@ -50,66 +50,64 @@
 
 (defn signal-eq? [sig1 sig2]
   "Two signals are equal when their tag (type) and data are equal.
-  Contravention and the start/finish times are ignored as these are
-  not meant for patterns."
+Contravention and the start/finish times are ignored as these are
+not meant for patterns."
   (and (= (:tag sig1) (:tag sig2))
        (= (:data sig1) (:data sig2))))
 
-(defrecord SimpleSignal [tag data start finish]
+(defrecord Signal [tag data start finish]
   Contravenable
   (contravened? [this other] false))
 
 ;; Contravenable signals only happen in patterns
 ;; so start and finish aren't needed
-(defrecord SimpleContraSignal [tag data]
+(defrecord SameContraventionSignal [tag data]
   Contravenable
   (contravened? [this other] (signal-eq? this other)))
 
 (defn make-signal
-  "Create a SimpleSignal."
+  "Create a Signal."
   ([tag data]
      (make-signal tag data nil nil))
   ([tag data start finish]
-     (SimpleSignal. tag data start finish)))
+     (Signal. tag data start finish)))
 
 (defn make-contra-signal
-  "Create a SimpleContraSignal."
+  "Create a SameContraventionSignal. This contravenes when
+this contravention is signal-eq? with another."
   [tag data]
-  (SimpleContraSignal. tag data))
+  (SameContraventionSignal. tag data))
 
 (defn contravene
-     "Create a SimpleContraSignal from another signal."
+     "Create a SameContraventionSignal from another signal."
      [{:keys [tag data]}]
-     (SimpleContraSignal. tag data))
+     (SameContraventionSignal. tag data))
 
 (defprotocol Pattern
   (make-recognizer [this callback]
                    "Make recognizer for pattern.
-                   Callback should be nil or a function taking recognizer as an argument.
-                   E.g.: (make-recognizer
-                           (to-pattern (safing :mach1 :on))
-                           (fn [recognizer] (println \"Completed recognizer: \" recognizer)))"))
+Callback should be nil or a function taking recognizer as an argument.
+E.g.: (make-recognizer
+  (to-pattern (safing :mach1 :on))
+    (fn [recognizer] (println \"Completed recognizer: \" recognizer)))"))
 
 (defprotocol Recognizer
   "A recognizer tracks the state of detecting a pattern."
   (handle-signal [this probe]
                  "Returns a recognizer in its next state based on the probe signal.")
-  ; (contravened? [this probe]
-  ; "Returns true if this recognizer is contravened by the probe signal.")
   (recognized [this]
               "Returns all matched signals recognized.
-              This is meant to be called after a recognizer completes
-              (has a status value of :complete). In other states
-              the returned signals will be implementation dependent.
-
-              The returned value can be a single signal or a list of signals."))
+This is meant to be called after a recognizer completes
+(has a status value of :complete). In other states
+the returned signals will be implementation dependent.
+The returned value can be a single signal or a list of signals."))
 
 (defn recognizer
   "Creates a recognizer.
 
-  This single arity version aids mapping patterns to recognizers and is
-  used in the Pattern protocol make-recognizer implementations. (This
-  works within a nested pattern, as only the topmost callback used.)"
+This single arity version aids mapping patterns to recognizers and is
+used in the Pattern protocol make-recognizer implementations. (This
+works within a nested pattern, as only the topmost callback used.)"
   ([pattern] (make-recognizer pattern nil))
   ([pattern callback] (make-recognizer pattern callback)))
 
@@ -143,8 +141,8 @@
 
 (defn to-patterns
   "Transforms a sequence of patterns and signals to all patterns.
-  Takes a sequence of elements that can be patterns or signals
-  and wraps all signals with BasePattern."
+Takes a sequence of elements that can be patterns or signals
+and wraps all signals with BasePattern."
   [elements] (map to-pattern elements))
 
 
@@ -198,32 +196,31 @@
                            (assoc this :status (next-status :futile status new-status probe))))))
   (recognized [this] (reverse (map recognized seen)))
   Contravenable
-  (contravened? [this probe] (some #(contravened? % probe) (pdbg seen))))
+  (contravened? [this probe] (some #(contravened? % probe) seen)))
 
 (defrecord InOrderPattern [patterns]
   Pattern
-  (make-recognizer [this callback] (InOrderRecognizer. '()
-                                                       (map recognizer patterns)
-                                                       empty-status
-                                                       callback)))
+  (make-recognizer [this callback] (InOrderRecognizer. '() (map recognizer patterns) empty-status callback)))
 
 (defn in-order-pattern
   [& elements]
   (InOrderPattern. (to-patterns elements)))
 
 
-;; TODO
-(defrecord AllRecognizer [targets status callback]
+(defrecord AllRecognizer [seen remainder status callback]
   Recognizer
   (handle-signal [this probe]
-                 this)
-  (recognized [this] nil)
+                 (do
+                   (assert (not-ended? status))
+                   (let []
+                     )))
+  (recognized [this] (reverse (map recognized seen)))
   Contravenable
   (contravened? [this probe] false))
 
 (defrecord AllPattern [patterns]
   Pattern
-  (make-recognizer [this callback] (AllRecognizer. patterns empty-status callback)))
+  (make-recognizer [this callback] (AllRecognizer. '() (map recognizer patterns) empty-status callback)))
 
 (defn all-pattern
   [& elements]

@@ -5,15 +5,15 @@
 
 (deftest status-test
   (let [e empty-status
-        e1 (make-status nil (Date.) (Date.))
+        e1 (make-status nil (date) (date))
         a (make-status :active)
-        a1 (make-status :active (Date.) (Date.))
+        a1 (make-status :active (date) (date))
         i (make-status :ignore)
-        i1 (make-status :ignore (Date.) (Date.))
+        i1 (make-status :ignore (date) (date))
         c (make-status :complete)
-        c1 (make-status :complete (Date.) (Date.))
+        c1 (make-status :complete (date) (date))
         f (make-status :futile)
-        f1 (make-status :futile (Date.) (Date.))]
+        f1 (make-status :futile (date) (date))]
     (is (active? a))
     (is (active? a1))
     (is (not (active? c)))
@@ -67,7 +67,7 @@
 
 (deftest signal-test
   (let [sig-1 (safing :mach1 :on)
-        sig-1a (safing :mach1 :on (Date.) (Date.))
+        sig-1a (safing :mach1 :on (date) (date))
         sig-2 (safing :mach2 :on)]
     (is (signal-eq? sig-1 sig-1a) "Signals with only date differenes should be equivalent")
     (is (not (signal-eq? sig-1 sig-2)) "Signals with different data should not be equivalent")))
@@ -98,22 +98,22 @@
 (deftest base-recognizer-test
   (let [r (make-recognizer (to-pattern (safing :mach1 :on)) nil)]
     (is (= :ignore
-           (:value (:status (handle-signal r (safing :mach2 :on (Date.) (Date.)))))))
+           (:value (:status (handle-signal r (safing :mach2 :on (date) (date)))))))
     (is (= :complete
-           (:value (:status (handle-signal r (safing :mach1 :on (Date.) (Date.)))))))))
+           (:value (:status (handle-signal r (safing :mach1 :on (date) (date)))))))))
 
 (deftest out-of-state-base-recognizer-test
   (let [r1 (make-recognizer (to-pattern (safing :mach1 :on)) nil)
-        r2 (handle-signal r1 (safing :mach1 :on (Date.) (Date.)))]
+        r2 (handle-signal r1 (safing :mach1 :on (date) (date)))]
     (is (not-ended? (:status r1)))
     (is (complete? (:status r2)))
     (is (not (not-ended? (:status r2))))
-    (is (thrown? AssertionError (handle-signal r2 (safing :mach2 :on (Date.) (Date.)))) "further signals should fail")))
+    (is (thrown? AssertionError (handle-signal r2 (safing :mach2 :on (date) (date)))) "further signals should fail")))
 
 (deftest base-recognizer-recognized-test
   (let [s (safing :mach1 :on)
         r1 (make-recognizer (to-pattern s) nil)
-        probe (safing :mach1 :on (Date.) (Date.))
+        probe (safing :mach1 :on (date) (date))
         r2 (handle-signal r1 probe)]
     (is (not-ended? (:status r1)))
     (is (complete? (:status r2)))
@@ -122,8 +122,8 @@
 (deftest one-recognizer-test
   (let [s (safing :mach1 :on)
         r1 (make-recognizer (one-pattern s) nil)
-        probe1 (safing :mach1 :off (Date.) (Date.))
-        probe2 (safing :mach1 :on (Date.) (Date.))
+        probe1 (safing :mach1 :off (date) (date))
+        probe2 (safing :mach1 :on (date) (date))
         r2 (handle-signal r1 probe1)
         r3 (handle-signal r2 probe2)]
     (is (ignore? (:status r2)))
@@ -171,8 +171,7 @@
         s3 (safing :mach2 :on (date 5) (date 6))
         r2 (handle-signal r1 s1)
         r3 (handle-signal r2 s2)
-        r4 (handle-signal r3 s3)
-        ]
+        r4 (handle-signal r3 s3)]
     (is (active? (:status r2)))
     (is (active? (:status r3)))
     (is (futile? (:status r4)))
