@@ -109,12 +109,7 @@ signal."
 
 
 (defprotocol Pattern
-  (make-recognizer [this callback]
-                   "Make recognizer for pattern.
-Callback should be nil or a function taking recognizer as an argument.
-E.g.: (make-recognizer
-  (to-pattern (safing :mach1 :on))
-    (fn [recognizer] (println \"Completed recognizer: \" recognizer)))"))
+  (make-recognizer [this]))
 
 (defprotocol Recognizer
   "A recognizer tracks the state of detecting a pattern."
@@ -123,21 +118,15 @@ E.g.: (make-recognizer
   (recognized [this]
               "Returns all matched signals recognized.
 This is meant to be called after a recognizer completes
-(has a status value of :complete). In other states
+(has a status value of :complete). In other state
 the returned signals will be implementation dependent.
 The returned value can be a single signal or a list of signals."))
 
 (defn recognizer
-  "Creates a recognizer.
-
-This single arity version aids mapping patterns to recognizers and is
-used in the Pattern protocol make-recognizer implementations. (This
-works within a nested pattern, as only the topmost callback used.)"
-  ([pattern] (make-recognizer pattern nil))
-  ([pattern callback] (make-recognizer pattern callback)))
+  [pattern] (make-recognizer pattern))
 
 
-(defrecord BaseRecognizer [target seen status callback]
+(defrecord BaseRecognizer [target seen status]
   Recognizer
   (handle-signal
    [this probe]
@@ -156,10 +145,9 @@ works within a nested pattern, as only the topmost callback used.)"
 
 (defrecord BasePattern [element]
   Pattern
-  (make-recognizer [this callback] (BaseRecognizer. element
-                                                    nil
-                                                    empty-status
-                                                    callback)))
+  (make-recognizer [this] (BaseRecognizer. element
+                                           nil
+                                           empty-status)))
 
 (defn base-pattern [element] (BasePattern. element))
 
@@ -176,7 +164,7 @@ and wraps all signals with BasePattern."
   [elements] (map to-pattern elements))
 
 
-(defrecord OneRecognizer [target status callback]
+(defrecord OneRecognizer [target status]
   Recognizer
   (handle-signal
    [this probe]
@@ -190,10 +178,9 @@ and wraps all signals with BasePattern."
 
 (defrecord OnePattern [pattern]
   Pattern
-  (make-recognizer [this callback]
-                   (OneRecognizer. (make-recognizer pattern nil)
-                                   empty-status
-                                   callback)))
+  (make-recognizer [this]
+                   (OneRecognizer. (make-recognizer pattern)
+                                   empty-status)))
 
 (defn one-pattern [element] (OnePattern. (to-pattern element)))
 
@@ -206,7 +193,7 @@ new status from new target and probe."
                    (:start new-status)) ; otherwise use start from new target
                (:finish probe)))
 
-(defrecord InOrderRecognizer [seen remainder status callback]
+(defrecord InOrderRecognizer [seen remainder status]
   Recognizer
   (handle-signal
    [this probe]
@@ -221,13 +208,11 @@ new status from new target and probe."
                    (conj seen new-target)
                    next-remainder
                    (next-status (if next-remainder :active :complete)
-                                status new-status probe)
-                   callback)
+                                status new-status probe))
         :active (InOrderRecognizer.
                  seen
                  (conj next-remainder new-target) ; replacing target with new
-                 (next-status :active status new-status probe)
-                 callback)
+                 (next-status :active status new-status probe))
         :ignore (if (or (contravened? new-target probe)
                         (contravened? this probe))
                   (assoc this :status
@@ -243,15 +228,14 @@ new status from new target and probe."
 
 (defrecord InOrderPattern [patterns]
   Pattern
-  (make-recognizer [this callback] (InOrderRecognizer.
-                                    '()
-                                    (map recognizer patterns)
-                                    empty-status
-                                    callback)))
+  (make-recognizer [this] (InOrderRecognizer.
+                           '()
+                           (map recognizer patterns)
+                           empty-status)))
 
 (defn in-order-pattern [& elements] (InOrderPattern. (to-patterns elements)))
 
-(defrecord AllRecognizer [seen remainder status callback]
+(defrecord AllRecognizer [seen remainder status]
   Recognizer
   (handle-signal
    [this probe]
@@ -285,15 +269,13 @@ new status from new target and probe."
                       (AllRecognizer.
                        (conj (:seen recognizer) new-target)
                        '()
-                       (next-status :complete st new-st probe)
-                       callback)
+                       (next-status :complete st new-st probe))
                       ;; else new-target is complete, but this recognizer is still active,
                       ;; add new-target to seen, remove from remainder
                       (recur (AllRecognizer.
                               (conj (:seen recognizer) new-target)
                               (remove #(= % target) rmdr)
-                              (next-status :active st new-st probe)
-                              callback)
+                              (next-status :active st new-st probe))
                              (next targets))))
                   ;; update recognizer with active status,
                   ;; and remainder with new-target, then iterate
@@ -301,8 +283,7 @@ new status from new target and probe."
                   (recur (AllRecognizer.
                           (:seen recognizer)
                           (replace {target new-target} (:remainder recognizer))
-                          (next-status :active st new-st probe)
-                          callback)
+                          (next-status :active st new-st probe))
                          (next targets))
                   ;; if probe contravenes target,
                   ;; update this recognizer to futile and return
@@ -326,15 +307,14 @@ new status from new target and probe."
 
 (defrecord AllPattern [patterns]
   Pattern
-  (make-recognizer [this callback] (AllRecognizer. '()
-                                                   (map recognizer patterns)
-                                                   empty-status
-                                                   callback)))
+  (make-recognizer [this] (AllRecognizer. '()
+                                          (map recognizer patterns)
+                                          empty-status)))
 
 (defn all-pattern [& elements] (AllPattern. (to-patterns elements)))
 
 
-(defrecord OneOfRecognizer [seen remainder status callback]
+(defrecord OneOfRecognizer [seen remainder status]
   Recognizer
   (handle-signal
    [this probe]
@@ -350,22 +330,19 @@ new status from new target and probe."
                  :complete (OneOfRecognizer.
                             new-target
                             (remove #(= % target) (:remainder recognizer))
-                            new-st
-                            callback)
+                            new-st)
                  ;; all sub patterns must become futile for this level
                  ;; to become futile, so set state to futile and continue
                  ;; iteratoing
                  :futile (recur (OneOfRecognizer.
                                  nil
                                  (replace {target new-target} (:remainder recognizer))
-                                 new-st
-                                 callback)
+                                 new-st)
                                 (next targets))
                  (recur (OneOfRecognizer.
                          nil
                          (replace {target new-target} (:remainder recognizer))
-                         (make-status :active nil (:finish probe))
-                         callback)
+                         (make-status :active nil (:finish probe)))
                         (next targets))))
          recognizer))))
   (recognized [this] (if seen (recognized seen) nil))
@@ -374,16 +351,15 @@ new status from new target and probe."
 
 (defrecord OneOfPattern [patterns]
   Pattern
-  (make-recognizer [this callback] (OneOfRecognizer. nil
-                                                     (map recognizer patterns)
-                                                     empty-status
-                                                     callback)))
+  (make-recognizer [this] (OneOfRecognizer. nil
+                                            (map recognizer patterns)
+                                            empty-status)))
 
 (defn one-of-pattern [& elements] (OneOfPattern. (to-patterns elements)))
 
 
 ;; TODO
-(defrecord WithinRecognizer [target duration status callback]
+(defrecord WithinRecognizer [target duration status]
   Recognizer
   (handle-signal [this probe]
                  this)
@@ -393,14 +369,14 @@ new status from new target and probe."
 
 (defrecord WithinPattern [pattern duration]
   Pattern
-  (make-recognizer [this callback] (WithinRecognizer. pattern duration empty-status callback)))
+  (make-recognizer [this] (WithinRecognizer. pattern duration empty-status)))
 
 (defn within-pattern [element duration]
   (WithinPattern. (to-pattern element) duration))
 
 
 ;; TODO
-(defrecord WithoutRecognizer [target status callback]
+(defrecord WithoutRecognizer [target start finish status]
   Recognizer
   (handle-signal [this probe]
                  this)
@@ -410,7 +386,7 @@ new status from new target and probe."
 
 (defrecord WithoutPattern [pattern start finish]
   Pattern
-  (make-recognizer [this callback] (WithoutRecognizer. pattern empty-status callback)))
+  (make-recognizer [this] (WithoutRecognizer. pattern start finish empty-status)))
 
 (defn without-pattern [element start finish]
   (WithoutPattern. (to-pattern element) start finish))
