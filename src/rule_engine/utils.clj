@@ -17,8 +17,8 @@ http://learnclojure.blogspot.com/2010/09/clojure-macro-tutorial-part-i-getting.h
   ([] (Date.))
   ([ms] (Date. (long ms))))
 
-(defn sdate
+(defn date-sec
   [s] (date (* s 1000)))
 
-(defn mdate
+(defn date-min
   [m] (date (* m 60 1000)))
