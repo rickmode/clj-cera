@@ -151,7 +151,7 @@
         s3a (safing :mach2 :on (date-sec 5) (date-sec 6))
         r2a (handle-signal r1 s1a)
         r3a (handle-signal r2a s2a)
-        ;; second path
+        ;; second pathy
         s1b (safing :mach2 :on (date-sec 1) (date-sec 2))
         s2b (safing :mach1 :on (date-sec 3) (date-sec 4))
         s3b (safing :mach3 :on (date-sec 5) (date-sec 6))
