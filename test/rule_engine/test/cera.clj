@@ -83,38 +83,15 @@
     (is (signal-eq? sig-1 sig-1a) "Signals with only date differenes should be equivalent")
     (is (not (signal-eq? sig-1 sig-2)) "Signals with different data should not be equivalent")))
 
-(deftest base-pattern-test
-  (let [sig (safing :mach1 :on)
-        pat (base-pattern sig)]
-    (is (= (:data sig) {:system :mach1 :status :on}))
-    (is (satisfies? rule-engine.cera/Pattern pat))
-    (is (= (:data (:element pat)) {:system :mach1 :status :on}))
-    (is (not (:contravened? pat)))))
-
-(deftest to-pattern-test
-  (let [pat (to-pattern (safing :mach1 :on))]
-    (is (satisfies? rule-engine.cera/Pattern pat))
-    (is (= (:data (:element pat)) {:system :mach1 :status :on}))
-    (is (not (:contravened? pat)))))
-
-(deftest make-recognizer-test
-  (let [sig (safing :mach1 :on)
-        pat (to-pattern sig)
-        r1 (recognizer pat)  ; non-polymorphic call that calls make-recognizer
-        r2 (make-recognizer pat)] ; polymorphic make-recognizer
-    (is (= sig (:target r1)))
-    (is (nil? (:callback r1)))
-    (is (= r1 r2) "Either mechanism for creation should create equivalent recognizer")))
-
 (deftest base-recognizer-test
-  (let [r (make-recognizer (to-pattern (safing :mach1 :on)))]
+  (let [r (base (safing :mach1 :on))]
     (is (= :ignore
            (:value (:status (handle-signal r (safing :mach2 :on (date) (date)))))))
     (is (= :complete
            (:value (:status (handle-signal r (safing :mach1 :on (date) (date)))))))))
 
 (deftest out-of-state-base-recognizer-test
-  (let [r1 (make-recognizer (to-pattern (safing :mach1 :on)))
+  (let [r1 (base (safing :mach1 :on))
         r2 (handle-signal r1 (safing :mach1 :on (date) (date)))]
     (is (not-ended? (:status r1)))
     (is (complete? (:status r2)))
@@ -126,7 +103,7 @@
 
 (deftest base-recognizer-recognized-test
   (let [s (safing :mach1 :on)
-        r1 (make-recognizer (to-pattern s))
+        r1 (base s)
         probe (safing :mach1 :on (date) (date))
         r2 (handle-signal r1 probe)]
     (is (not-ended? (:status r1)))
@@ -135,7 +112,7 @@
 
 (deftest one-recognizer-test
   (let [s (safing :mach1 :on)
-        r1 (make-recognizer (one-pattern s))
+        r1 (one s)
         probe1 (safing :mach1 :off (date) (date))
         probe2 (safing :mach1 :on (date) (date))
         r2 (handle-signal r1 probe1)
@@ -145,13 +122,13 @@
     (is (identical? probe2 (recognized r3)))))
 
 (deftest in-order-test
-  (let [r1 (recognizer (in-order-pattern (safing :mach1 :on) (safing :mach2 :on)))
+  (let [r1 (in-order (safing :mach1 :on) (safing :mach2 :on))
         s1a (safing :mach1 :on (date-sec 1) (date-sec 2))
         s2a (safing :mach2 :on (date-sec 3) (date-sec 4))
         s3a (safing :mach2 :on (date-sec 5) (date-sec 6))
         r2a (handle-signal r1 s1a)
         r3a (handle-signal r2a s2a)
-        ;; second pathy
+        ;; second path
         s1b (safing :mach2 :on (date-sec 1) (date-sec 2))
         s2b (safing :mach1 :on (date-sec 3) (date-sec 4))
         s3b (safing :mach3 :on (date-sec 5) (date-sec 6))
@@ -169,7 +146,7 @@
     (is (= (:start s1a) (:start (:status r3a))))
     (is (= (:finish s2a) (:finish (:status r3a))))
     (is (thrown? AssertionError (handle-signal r3a s3a)))
-
+    ;; now check second path
     (is (ignore? (:status r2b)))
     (is (active? (:status r3b)))
     (is (ignore? (:status r4b)))
@@ -179,9 +156,9 @@
     (is (= (:finish s4b) (:finish (:status r5b))))))
 
 (deftest in-order-contra-test-1
-  (let [r1 (recognizer (in-order-pattern (safing :mach1 :on)
-                                         (contravene-any (safing :mach2 :on))
-                                         (safing :mach3 :on)))
+  (let [r1 (in-order (safing :mach1 :on)
+                     (contravene-any (safing :mach2 :on))
+                     (safing :mach3 :on))
         s1 (safing :mach1 :on (date-sec 1) (date-sec 2))
         s2 (safing :mach2 :on (date-sec 3) (date-sec 4))
         s3 (safing :mach2 :on (date-sec 5) (date-sec 6))
@@ -194,9 +171,9 @@
     (is (thrown? AssertionError (handle-signal r4 s3)))))
 
 (deftest in-order-contra-test-2
-  (let [r1 (recognizer (in-order-pattern (contravene-any (a-sig 1))
-                                         (a-sig 2)
-                                         (a-sig 3)))
+  (let [r1 (in-order (contravene-any (a-sig 1))
+                     (a-sig 2)
+                     (a-sig 3))
         s1 (a-sig 2 (date-sec 1) (date-sec 2))
         r2 (handle-signal r1 s1)]
     (is (futile? (:status r2)))
@@ -204,7 +181,7 @@
     (is (= (:finish (:status r2)) (date-sec 2)))))
 
 (deftest all-test-1
-  (let [r1 (recognizer (all-pattern (safing :mach1 :on)))
+  (let [r1 (all (safing :mach1 :on))
         s1 (safing :mach2 :on (date-sec 1) (date-sec 2))
         s2 (safing :mach1 :on (date-sec 3) (date-sec 4))
         r2 (handle-signal r1 s1)
@@ -223,9 +200,9 @@
     (is (signal-eq? (recognized r3) [(safing :mach1 :on)]))))
 
 (deftest all-test-2
-  (let [r1 (recognizer (all-pattern (safing :mach1 :on)
-                                    (safing :mach2 :on)
-                                    (safing :mach3 :on)))
+  (let [r1 (all (safing :mach1 :on)
+                (safing :mach2 :on)
+                (safing :mach3 :on))
         s1 (safing :mach1 :on (date-sec 1) (date-sec 2))
         s2 (safing :mach3 :on (date-sec 3) (date-sec 4))
         s3 (make-signal ::Whaa 0 (date-sec 5) (date-sec 6))
@@ -261,7 +238,7 @@
         baa (a-sig "baa")
         bar (a-sig "bar")
         foobar (a-sig "foobar")
-        r1 (recognizer (all-pattern foo (in-order-pattern baa bar) foobar))
+        r1 (all foo (in-order baa bar) foobar)
         r2 (handle-signal r1 (a-sig "bar" (date-sec 1) (date-sec 2)))
         r3 (handle-signal r2 (a-sig "baa" (date-sec 3) (date-sec 4)))
         r4 (handle-signal r3 (a-sig "foobar" (date-sec 5) (date-sec 6)))
@@ -276,7 +253,7 @@
     (is (complete? (:status r7)))))
 
 (deftest all-contra-test-1
-  (let [r1 (recognizer (all-pattern (contravene-any (a-sig 1)) (a-sig 2) (a-sig 3)))
+  (let [r1 (all (contravene-any (a-sig 1)) (a-sig 2) (a-sig 3))
         r2 (handle-signal r1 (a-sig 1 (date-sec 1) (date-sec 2)))
         r3 (handle-signal r2 (a-sig 4 (date-sec 3) (date-sec 4)))]
     (is (active? (:status r2)))
@@ -285,7 +262,7 @@
     (is (= (date-sec 4) (:finish (:status r3))))))
 
 (deftest all-contra-test-2
-  (let [r1 (recognizer (all-pattern (a-sig 1) (contravene-same (a-sig 2)) (a-sig 3)))
+  (let [r1 (all (a-sig 1) (contravene-same (a-sig 2)) (a-sig 3))
         r2 (handle-signal r1 (a-sig 3 (date-sec 1) (date-sec 2)))
         r3 (handle-signal r2 (a-sig 4 (date-sec 3) (date-sec 4)))
         r4 (handle-signal r3 (a-sig 2 (date-sec 5) (date-sec 6)))
@@ -298,7 +275,7 @@
     (is (= (date-sec 8) (:finish (:status r5))))))
 
 (deftest one-of-test-1
-  (let [r1 (recognizer (one-of-pattern (a-sig 1) (a-sig 2) (a-sig 3)))
+  (let [r1 (one-of (a-sig 1) (a-sig 2) (a-sig 3))
         r2 (handle-signal r1 (a-sig 4 (date-sec 1) (date-sec 2)))
         r3 (handle-signal r2 (a-sig 2 (date-sec 3) (date-sec 4)))]
     (is (active? (:status r2)))
@@ -309,12 +286,12 @@
     (is (= (date-sec 4) (:finish (:status r3))))))
 
 (deftest one-of-test-2
-  (let [r1 (recognizer (one-of-pattern (a-sig "foo")
-                                       (in-order-pattern (a-sig "baa")
-                                                         (a-sig "bar"))
-                                       (all-pattern (a-sig 1)
-                                                    (a-sig 2)
-                                                    (a-sig "foobar"))))
+  (let [r1 (one-of (a-sig "foo")
+                   (in-order (a-sig "baa")
+                             (a-sig "bar"))
+                   (all (a-sig 1)
+                        (a-sig 2)
+                        (a-sig "foobar")))
         r2 (handle-signal r1 (a-sig 1 (date-sec 1) (date-sec 2)))
         r3 (handle-signal r2 (a-sig "bar" (date-sec 3) (date-sec 4)))
         r4 (handle-signal r3 (a-sig "baa" (date-sec 5) (date-sec 6)))

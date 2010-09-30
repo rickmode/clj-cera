@@ -108,9 +108,6 @@ signal."
      (SameContraventionSignal. tag data))
 
 
-(defprotocol Pattern
-  (make-recognizer [this]))
-
 (defprotocol Recognizer
   "A recognizer tracks the state of detecting a pattern."
   (handle-signal [this probe]
@@ -121,9 +118,6 @@ This is meant to be called after a recognizer completes
 (has a status value of :complete). In other state
 the returned signals will be implementation dependent.
 The returned value can be a single signal or a list of signals."))
-
-(defn recognizer
-  [pattern] (make-recognizer pattern))
 
 
 (defrecord BaseRecognizer [target seen status]
@@ -143,25 +137,14 @@ The returned value can be a single signal or a list of signals."))
   Contravenable
   (contravened? [this probe] (contravened? target probe)))
 
-(defrecord BasePattern [element]
-  Pattern
-  (make-recognizer [this] (BaseRecognizer. element
-                                           nil
-                                           empty-status)))
+(defn base [element] (BaseRecognizer. element nil empty-status))
 
-(defn base-pattern [element] (BasePattern. element))
 
-(defn to-pattern
-  "Ensures element is a Pattern. Passes element back if it is a Pattern,
-  otherwise it is wrapped in a BasePattern."
-  [element]
-  (if (satisfies? Pattern element) element (BasePattern. element)))
+(defn to-recognizer
+  "Ensures element is a recognizer. Wraps non-recognizers in a base recognizer."
+  [element] (if (satisfies? Recognizer element) element (base element)))
 
-(defn to-patterns
-  "Transforms a sequence of patterns and signals to all patterns.
-Takes a sequence of elements that can be patterns or signals
-and wraps all signals with BasePattern."
-  [elements] (map to-pattern elements))
+(defn to-recognizers [elements] (map to-recognizer elements))
 
 
 (defrecord OneRecognizer [target status]
@@ -176,13 +159,8 @@ and wraps all signals with BasePattern."
   Contravenable
   (contravened? [this probe] false))
 
-(defrecord OnePattern [pattern]
-  Pattern
-  (make-recognizer [this]
-                   (OneRecognizer. (make-recognizer pattern)
-                                   empty-status)))
+(defn one [element] (OneRecognizer. (to-recognizer element) empty-status))
 
-(defn one-pattern [element] (OnePattern. (to-pattern element)))
 
 (defn- next-status
   "Create a new status based on the start and finish times of current status,
@@ -226,14 +204,8 @@ new status from new target and probe."
   Contravenable
   (contravened? [this probe] (some #(contravened? % probe) seen)))
 
-(defrecord InOrderPattern [patterns]
-  Pattern
-  (make-recognizer [this] (InOrderRecognizer.
-                           '()
-                           (map recognizer patterns)
-                           empty-status)))
+(defn in-order [& elements] (InOrderRecognizer. '() (to-recognizers elements) empty-status))
 
-(defn in-order-pattern [& elements] (InOrderPattern. (to-patterns elements)))
 
 (defrecord AllRecognizer [seen remainder status]
   Recognizer
@@ -305,13 +277,9 @@ new status from new target and probe."
                 (let [contra? #(contravened? % probe)]
                   (or (some contra? seen) (some contra? remainder)))))
 
-(defrecord AllPattern [patterns]
-  Pattern
-  (make-recognizer [this] (AllRecognizer. '()
-                                          (map recognizer patterns)
-                                          empty-status)))
-
-(defn all-pattern [& elements] (AllPattern. (to-patterns elements)))
+(defn all [& elements] (AllRecognizer. '()
+                                       (to-recognizers elements)
+                                       empty-status))
 
 
 (defrecord OneOfRecognizer [seen remainder status]
@@ -349,13 +317,9 @@ new status from new target and probe."
   Contravenable
   (contravened? [this probe] false))
 
-(defrecord OneOfPattern [patterns]
-  Pattern
-  (make-recognizer [this] (OneOfRecognizer. nil
-                                            (map recognizer patterns)
-                                            empty-status)))
-
-(defn one-of-pattern [& elements] (OneOfPattern. (to-patterns elements)))
+(defn one-of [& elements] (OneOfRecognizer. nil
+                                            (to-recognizers elements)
+                                            empty-status))
 
 
 ;; TODO
@@ -367,12 +331,9 @@ new status from new target and probe."
   Contravenable
   (contravened? [this probe] false))
 
-(defrecord WithinPattern [pattern duration]
-  Pattern
-  (make-recognizer [this] (WithinRecognizer. pattern duration empty-status)))
-
-(defn within-pattern [element duration]
-  (WithinPattern. (to-pattern element) duration))
+(defn within [element duration] (WithinRecognizer. (to-recognizer element)
+                                                   duration
+                                                   empty-status))
 
 
 ;; TODO
@@ -384,10 +345,7 @@ new status from new target and probe."
   Contravenable
   (contravened? [this probe] false))
 
-(defrecord WithoutPattern [pattern start finish]
-  Pattern
-  (make-recognizer [this] (WithoutRecognizer. pattern start finish empty-status)))
-
-(defn without-pattern [element start finish]
-  (WithoutPattern. (to-pattern element) start finish))
-
+(defn without [element start finish] (WithoutRecognizer. (to-recognizer element)
+                                                         start
+                                                         finish
+                                                         empty-status))
