@@ -214,62 +214,57 @@ new status from new target and probe."
    (do
      (assert (not-ended? status))
      ;; new-recognizer will be final result of iteratively signaling
-     ;; current remainders with probe. During each iteration
-     ;; During iteration, targets is a copy of the initial remainder.
-     ;; Updates to targets do not need to be reflected in the list
-     ;; used for iteration, since we never revisit those items.
-     ;; However new target states need to be updated in the
-     ;; recognizer's seen and remainder.
+     ;; current remainders with probe (the targets loop binding).
      (let [new-recognizer
-           (loop [recognizer (assoc-in this [:status :value] :ignore)
+           ;; we'll loop, changing local copies of the recognizer state
+           ;; and iterating on targets
+           (loop [sn seen
+                  rmdr remainder
+                  st (assoc status :value :ignore)
                   targets remainder]
              (if targets
-               (let [st (:status recognizer)
-                     target (first targets)
+               (let [target (first targets)
                      new-target (handle-signal target probe)
                      new-st (:status new-target)]
-                 (case
-                  (:value new-st)
-                  ;; if this is the last remainder, this recognizer is complete
-                  ;; otherwise it is still active
-                  :complete
-                  (let [rmdr (:remainder recognizer)
-                        ;; equiv. to (= 1 (count rmdr))
-                        last-remainder? (and (first rmdr) (not (next rmdr)))] 
-                    (if last-remainder?
-                      ;; then update recognizer to complete and return
-                      (AllRecognizer.
-                       (conj (:seen recognizer) new-target)
-                       '()
-                       (next-status :complete st new-st probe))
-                      ;; else new-target is complete, but this recognizer is still active,
-                      ;; add new-target to seen, remove from remainder
-                      (recur (AllRecognizer.
-                              (conj (:seen recognizer) new-target)
-                              (remove #(= % target) rmdr)
-                              (next-status :active st new-st probe))
-                             (next targets))))
-                  ;; update recognizer with active status,
-                  ;; and remainder with new-target, then iterate
-                  :active
-                  (recur (AllRecognizer.
-                          (:seen recognizer)
-                          (replace {target new-target} (:remainder recognizer))
-                          (next-status :active st new-st probe))
-                         (next targets))
-                  ;; if probe contravenes target,
-                  ;; update this recognizer to futile and return
-                  :futile
-                  (assoc recognizer
-                    :status (next-status :futile st new-st probe))
-                  ;; default - ignore
-                  (recur recognizer (next targets)))) ; ignore: iterate with no state change
-               recognizer))] ; else of if target
+                 (case (:value new-st)
+                       ;; if this is the last remainder, this recognizer is complete
+                       ;; otherwise it is still active
+                       ;; (and first not next is equivalent to count == 1)
+                       :complete (if (and (first rmdr) (not (next rmdr)))
+                                   (AllRecognizer. (conj sn new-target)
+                                                   '()
+                                                   (next-status :complete
+                                                                st
+                                                                new-st
+                                                                probe))
+                                   (recur (conj sn new-target)
+                                          (remove #(= % target) rmdr)
+                                          (next-status :active st new-st probe)
+                                          (next targets)))
+                       :active (recur sn
+                                      (replace {target new-target} rmdr)
+                                      (next-status :active st new-st probe)
+                                      (next targets))
+                       :futile (AllRecognizer. sn
+                                               rmdr
+                                               (next-status :futile
+                                                            st
+                                                            new-st
+                                                            probe))
+                       ;; default - ignore
+                       (recur sn
+                              rmdr
+                              st
+                              (next targets))))
+               ;; else targets is nil - create final recognizer
+               (AllRecognizer. sn rmdr st)))]
        ;; done looping - check for contravention
-       (if (and (ignore? (:status new-recognizer)) (contravened? new-recognizer probe))
-         (assoc new-recognizer :status (make-status :futile
-                                                    (:start (:status new-recognizer))
-                                                    (:finish probe)))
+       (if (and (ignore? (:status new-recognizer))
+                (contravened? new-recognizer probe))
+         (assoc new-recognizer :status
+                (make-status :futile
+                             (:start (:status new-recognizer))
+                             (:finish probe)))
          new-recognizer))))
   (recognized [this] (reverse (map recognized seen)))
   Contravenable
@@ -288,31 +283,27 @@ new status from new target and probe."
    [this probe]
    (do
      (assert (not-ended? status))
-     (loop [recognizer this, targets remainder]
+     (loop [sn seen, rmdr remainder, st status, targets remainder]
        (if targets
-         (let [st (:status recognizer)
-               target (first targets)             
+         (let [target (first targets)             
                new-target (handle-signal target probe)
                new-st (:status new-target)]
            (case (:value new-st)
                  :complete (OneOfRecognizer.
                             new-target
-                            (remove #(= % target) (:remainder recognizer))
+                            (remove #(= % target) rmdr)
                             new-st)
-                 ;; all sub patterns must become futile for this level
-                 ;; to become futile, so set state to futile and continue
-                 ;; iteratoing
-                 :futile (recur (OneOfRecognizer.
-                                 nil
-                                 (replace {target new-target} (:remainder recognizer))
-                                 new-st)
+                 ;; All sub patterns must become futile for this recognizer to
+                 ;; be futile. So update status and remainder, then iterate.
+                 :futile (recur nil
+                                (replace {target new-target} rmdr)
+                                new-st
                                 (next targets))
-                 (recur (OneOfRecognizer.
-                         nil
-                         (replace {target new-target} (:remainder recognizer))
-                         (make-status :active nil (:finish probe)))
+                 (recur nil
+                        (replace {target new-target} rmdr)
+                        (make-status :active nil (:finish probe))
                         (next targets))))
-         recognizer))))
+         (OneOfRecognizer. sn rmdr st)))))
   (recognized [this] (if seen (recognized seen) nil))
   Contravenable
   (contravened? [this probe] false))
