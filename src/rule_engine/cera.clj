@@ -29,8 +29,6 @@
 
 ;; empty statuses can always share a single constant since would all be identical
 (def empty-status (make-status))
-;; BaseRecognizer's use of ignore status doesn't need times, so it can use a constant
-(def ignore-status (make-status :ignore))
 
 (defn active? [status]
   (= (:value status) :active))
@@ -115,7 +113,7 @@ signal."
   (recognized [this]
               "Returns all matched signals recognized.
 This is meant to be called after a recognizer completes
-(has a status value of :complete). In other state
+(has a status value of :complete). In other states
 the returned signals will be implementation dependent.
 The returned value can be a single signal or a list of signals."))
 
@@ -130,9 +128,8 @@ The returned value can be a single signal or a list of signals."))
        (assoc this
          :status (make-status :complete (:start probe) (:finish probe))
          :seen probe)
-       (if (ignore? status)
-         this       ; still ignoring signals - no need to change state
-         (assoc this :status ignore-status))))) ; times will be set on complete
+       (assoc this
+         :status (make-status :ignore nil (:finish probe))))))
   (recognized [this] seen)
   Contravenable
   (contravened? [this probe] (contravened? target probe)))
@@ -142,7 +139,9 @@ The returned value can be a single signal or a list of signals."))
 
 (defn to-recognizer
   "Ensures element is a recognizer. Wraps non-recognizers in a base recognizer."
-  [element] (if (satisfies? Recognizer element) element (base element)))
+  [element] (if (satisfies? Recognizer element)
+              element
+              (base element)))
 
 (defn to-recognizers [elements] (map to-recognizer elements))
 
@@ -154,8 +153,8 @@ The returned value can be a single signal or a list of signals."))
    (do
      (assert (not-ended? status))
      (let [new-target (handle-signal target probe)]
-       (assoc this :target new-target :status (:status new-target)))))
-  (recognized [this] (recognized target))
+       (OneRecognizer. new-target (:status new-target)))))
+  (recognized [this] (if target (recognized target) nil))
   Contravenable
   (contravened? [this probe] false))
 
@@ -180,26 +179,27 @@ new status from new target and probe."
      (let [new-target (handle-signal (first remainder) probe)
            new-status (:status new-target)
            next-remainder (next remainder)]
-       (case
-        (:value new-status)
-        :complete (InOrderRecognizer.
-                   (conj seen new-target)
-                   next-remainder
-                   (next-status (if next-remainder :active :complete)
-                                status new-status probe))
-        :active (InOrderRecognizer.
-                 seen
-                 (conj next-remainder new-target) ; replacing target with new
-                 (next-status :active status new-status probe))
-        :ignore (if (or (contravened? new-target probe)
-                        (contravened? this probe))
-                  (assoc this :status
-                         (next-status :futile status new-status probe))
-                  (if (ignore? status)
-                    this                ; keep ignoring 
-                    (assoc-in this [:status :value] :ignore)))
-        (assoc this :status
-               (next-status :futile status new-status probe))))))
+       (case (:value new-status)
+             :complete
+             (InOrderRecognizer. (conj seen new-target)
+                                 next-remainder
+                                 (next-status (if next-remainder
+                                                :active
+                                                :complete)
+                                              status new-status probe))
+             :active
+             (InOrderRecognizer. seen
+                                 (conj next-remainder new-target) ; updating target
+                                 (next-status :active status new-status probe))
+             :ignore
+             (assoc this :status
+                    (next-status (if (or (contravened? new-target probe)
+                                         (contravened? this probe))
+                                   :futile
+                                   :ignore)
+                                 status new-status probe))
+             (assoc this :status
+                    (next-status :futile status new-status probe))))))
   (recognized [this] (reverse (map recognized seen)))
   Contravenable
   (contravened? [this probe] (some #(contravened? % probe) seen)))
@@ -322,30 +322,58 @@ new status from new target and probe."
                                             empty-status))
 
 
-;; TODO
 (defrecord WithinRecognizer [target duration status]
   Recognizer
-  (handle-signal [this probe]
-                 this)
-  (recognized [this] nil)
+  (handle-signal
+   [this probe]
+   (do
+     (assert (not-ended? status))
+     (let [new-target (handle-signal target probe)
+           new-status (:status new-target)
+           {:keys [start finish]} new-status]
+       (WithinRecognizer. new-target
+                          duration
+                          (if (and (complete? new-status)
+                                   (> (- (.getTime finish) (.getTime start))
+                                      duration))
+                            (assoc new-status :value :futile)
+                            new-status)))))
+  (recognized [this] (if target (recognized target) nil))
   Contravenable
   (contravened? [this probe] false))
 
-(defn within [element duration] (WithinRecognizer. (to-recognizer element)
+(defn within
+  ;; duration is in milliseconds
+  [element duration] (WithinRecognizer. (to-recognizer element)
                                                    duration
                                                    empty-status))
 
 
-;; TODO
 (defrecord WithoutRecognizer [target start finish status]
   Recognizer
-  (handle-signal [this probe]
-                 this)
-  (recognized [this] nil)
+  (handle-signal
+   [this probe]
+   (do
+     (assert (not-ended? status))
+     (let [new-target (handle-signal target probe)
+           new-status (:status new-target)]
+       (WithoutRecognizer. new-target
+                           start
+                           finish
+                           (if (and (complete? new-status)
+                                    (not (or (> (.getTime (:start new-status))
+                                                (.getTime finish))
+                                             (< (.getTime (:finish new-status))
+                                                (.getTime start)))))
+                             (assoc new-status :value :futile)
+                             new-status)))))
+  (recognized [this] (if target (recognized target) nil))
   Contravenable
   (contravened? [this probe] false))
 
-(defn without [element start finish] (WithoutRecognizer. (to-recognizer element)
-                                                         start
-                                                         finish
-                                                         empty-status))
+(defn without
+  ;; start and finish are dates
+  [element start finish] (WithoutRecognizer. (to-recognizer element)
+                                             start
+                                             finish
+                                             empty-status))
