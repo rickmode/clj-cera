@@ -1,4 +1,4 @@
-(ns rule-engine.test.cera
+(ns rule-engine.test.test-cera
   (:use [rule-engine.cera] :reload)
   (:use [rule-engine.utils])
   (:use [clojure.test]))
