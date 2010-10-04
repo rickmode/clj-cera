@@ -38,19 +38,7 @@
   (let [v (:value status)] (and (not= v :complete) (not= v :futile))))
 
 
-(defprotocol Contravenable
-  (contravened? [this other] "Returns true if this is contravened by other."))
-
-(defn signal-eq? [sig1 sig2]
-  "Two signals are equal when their tag (type) and data are equal.
-Contravention and the start/finish times are ignored as these are
-not meant for patterns."
-  (and (= (:tag sig1) (:tag sig2))
-       (= (:data sig1) (:data sig2))))
-
-(defrecord Signal [tag data start finish]
-  Contravenable
-  (contravened? [this other] false))
+(defrecord Signal [tag data start finish])
 
 (defn make-signal
   "Create a Signal."
@@ -59,75 +47,60 @@ not meant for patterns."
   ([tag data start finish]
      (Signal. tag data start finish)))
 
-;; Contravenable signals only happen in patterns
-;; so start and finish aren't needed
-;; ContraventionSignal contravenes everything
-(defrecord ContraventionSignal [tag data]
-  Contravenable
-  (contravened? [this other] true))
-
-(defn make-contravention-signal
-  "Create a ContraventionSignal. This contravenes
-any other signal."
-  [tag data]
-  (ContraventionSignal. tag data))
-
-(defn contravene-any
-  "Creates a ContraventionSignal from another signal.
-This contravenes any other signal."
-     [{:keys [tag data]}]
-     (ContraventionSignal. tag data))
-
-;; Contravenable signals only happen in patterns
-;; so start and finish aren't needed
-(defrecord SameContraventionSignal [tag data]
-  Contravenable
-  (contravened? [this other] (signal-eq? this other)))
-
-(defn make-same-contravention-signal
-  "Create a SameContraventionSignal. This contravenes when
-this signal is signal-eq? with the probe signal."
-  [tag data]
-  (SameContraventionSignal. tag data))
-
-(defn contravene-same
-  "Creates a SameContraventionSignal from another signal.
-This contravenes when this signal is signal-eq? with the probe
-signal."
-     [{:keys [tag data]}]
-     (SameContraventionSignal. tag data))
+(defn signal-eq? [sig1 sig2]
+  "Two signals are equal when their tag (type) and data are equal.
+Start and finish times are ignored when matching signal patterns this way."
+  (and (= (:tag sig1) (:tag sig2))
+       (= (:data sig1) (:data sig2))))
 
 
 (defprotocol Recognizer
   "A recognizer tracks the state of detecting a pattern."
   (transition [this probe]
-                 "Returns a recognizer in its next state based on the probe signal.")
+              "Returns a recognizer in its next state based on the probe signal.")
   (recognized [this]
-              "Returns all matched signals recognized.
-This is meant to be called after a recognizer completes
-(has a status value of :complete). In other states
-the returned signals will be implementation dependent.
-The returned value can be a single signal or a list of signals."))
+              "Returns all matched signals recognized.")
+  (contravened? [this probe] "Is this recognizer contravened by probe."))
 
 
-(defrecord BaseRecognizer [target seen status]
+(defrecord PredicateRecognizer [predicate? contravention-predicate? seen status]
   Recognizer
-  (transition
-   [this probe]
-   (do
-     (assert (not-ended? status))
-     (if (signal-eq? target probe)
-       (assoc this
-         :status (make-status :complete (:start probe) (:finish probe))
-         :seen probe)
-       (assoc this
-         :status (make-status :ignore nil (:finish probe))))))
+  (transition [this probe] (do
+                             (assert (not-ended? status))
+                             (if (predicate? probe)
+                               (assoc this
+                                 :seen probe
+                                 :status (make-status :complete (:start probe) (:finish probe)))
+                               (assoc this
+                                 :status (make-status :ignore nil (:finish probe))))))
+
   (recognized [this] seen)
-  Contravenable
-  (contravened? [this probe] (contravened? target probe)))
 
-(defn base [element] (BaseRecognizer. element nil empty-status))
+  (contravened? [this probe] (and contravention-predicate?
+                                  (contravention-predicate? probe))))
 
+(defn pred
+  "Create a genaral predicate matching recognizer.
+The predicate? should a function with no side effects that takes a single Signal as an argument.
+The optional contravention-predicate? should also be a side-effect free function
+taking a single Signal argument."
+  ([predicate?] (PredicateRecognizer. predicate? nil nil empty-status))
+  ([predicate? contravention-predicate?] (PredicateRecognizer. predicate? contravention-predicate? nil empty-status)))
+
+(defn base
+  "Create a base recognizer that completes when signal matches probe via signal-eq?
+and contravenes nothing."
+  [signal] (pred (partial signal-eq? signal)))
+
+(defn contravene-any
+  "Create a base recognizer that also contravenes any other signal."
+  [signal] (pred (partial signal-eq? signal) (constantly true)))
+
+(defn contravene-same
+  "Crease a base recognizer that also contravenes when this signal
+is signal-eq? with the probe signal."
+  [signal] (let [partial-eq? (partial signal-eq? signal)]
+              (pred partial-eq? partial-eq?)))
 
 (defn to-recognizer
   "Ensures element is a recognizer. Wraps non-recognizers in a base recognizer."
@@ -149,7 +122,6 @@ The returned value can be a single signal or a list of signals."))
 
   (recognized [this] (if target (recognized target) nil))
 
-  Contravenable
   (contravened? [this probe] false))
 
 (defn one [element] (OneRecognizer. (to-recognizer element) empty-status))
@@ -197,7 +169,6 @@ new status from new target and probe."
 
   (recognized [this] (reverse (map recognized seen)))
 
-  Contravenable
   (contravened? [this probe] (some #(contravened? % probe) seen)))
 
 (defn in-order [& elements] (InOrderRecognizer. '() (to-recognizers elements) empty-status))
@@ -254,7 +225,6 @@ new status from new target and probe."
 
   (recognized [this] (reverse (map recognized seen)))
 
-  Contravenable
   (contravened? [this probe]
                 (let [contra? #(contravened? % probe)]
                   (or (some contra? seen) (some contra? remainder)))))
@@ -293,7 +263,6 @@ new status from new target and probe."
 
   (recognized [this] (if seen (recognized seen) nil))
 
-  Contravenable
   (contravened? [this probe] false))
 
 (defn one-of [& elements] (OneOfRecognizer. nil (to-recognizers elements) empty-status))
@@ -317,7 +286,6 @@ new status from new target and probe."
 
   (recognized [this] (if target (recognized target) nil))
 
-  Contravenable
   (contravened? [this probe] false))
 
 (defn within
@@ -344,7 +312,6 @@ new status from new target and probe."
 
   (recognized [this] (if target (recognized target) nil))
 
-  Contravenable
   (contravened? [this probe] false))
 
 (defn without
