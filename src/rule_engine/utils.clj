@@ -1,6 +1,5 @@
 (ns rule-engine.utils
-  (:use [clojure.pprint :only [pprint]])
-  (:import [java.util Date]))
+  (:use [clojure.pprint :only [pprint]]))
 
 (defmacro dbg
   "dbg macro with suggested improvements as described at
@@ -14,8 +13,8 @@ http://learnclojure.blogspot.com/2010/09/clojure-macro-tutorial-part-i-getting.h
   ([x & more] `(let [x# (~x ~@more)] (print "(" '~x "") (apply print '~more) (println " ) =" x#) (pprint x#) (newline) x#)))
 
 (defn date
-  ([] (Date.))
-  ([ms] (Date. (long ms))))
+  ([] (System/currentTimeMillis))
+  ([ms] ms))
 
 (defn date-sec
   [s] (date (* s 1000)))
