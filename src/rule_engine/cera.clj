@@ -100,7 +100,7 @@ signal."
 
 (defprotocol Recognizer
   "A recognizer tracks the state of detecting a pattern."
-  (handle-signal [this probe]
+  (transition [this probe]
                  "Returns a recognizer in its next state based on the probe signal.")
   (recognized [this]
               "Returns all matched signals recognized.
@@ -112,7 +112,7 @@ The returned value can be a single signal or a list of signals."))
 
 (defrecord BaseRecognizer [target seen status]
   Recognizer
-  (handle-signal
+  (transition
    [this probe]
    (do
      (assert (not-ended? status))
@@ -140,11 +140,11 @@ The returned value can be a single signal or a list of signals."))
 
 (defrecord OneRecognizer [target status]
   Recognizer
-  (handle-signal
+  (transition
    [this probe]
    (do
      (assert (not-ended? status))
-     (let [new-target (handle-signal target probe)]
+     (let [new-target (transition target probe)]
        (OneRecognizer. new-target (:status new-target)))))
 
   (recognized [this] (if target (recognized target) nil))
@@ -166,11 +166,11 @@ new status from new target and probe."
 
 (defrecord InOrderRecognizer [seen remainder status]
   Recognizer
-  (handle-signal
+  (transition
    [this probe]
    (do
      (assert (not-ended? status))
-     (let [new-target (handle-signal (first remainder) probe)
+     (let [new-target (transition (first remainder) probe)
            new-status (:status new-target)
            next-remainder (next remainder)]
        (case (:value new-status)
@@ -205,7 +205,7 @@ new status from new target and probe."
 
 (defrecord AllRecognizer [seen remainder status]
   Recognizer
-  (handle-signal
+  (transition
    [this probe]
    (do
      (assert (not-ended? status))
@@ -218,7 +218,7 @@ new status from new target and probe."
                   targets remainder]
              (if targets
                (let [target (first targets)
-                     new-target (handle-signal target probe)
+                     new-target (transition target probe)
                      new-st (:status new-target)]
                  (case (:value new-st)
                        ;; if this is the last remainder, this recognizer is complete
@@ -264,14 +264,14 @@ new status from new target and probe."
 
 (defrecord OneOfRecognizer [seen remainder status]
   Recognizer
-  (handle-signal
+  (transition
    [this probe]
    (do
      (assert (not-ended? status))
      (loop [sn seen, rmdr remainder, st status, targets remainder]
        (if targets
          (let [target (first targets)             
-               new-target (handle-signal target probe)
+               new-target (transition target probe)
                new-st (:status new-target)]
            (case (:value new-st)
                  :complete
@@ -301,11 +301,11 @@ new status from new target and probe."
 
 (defrecord WithinRecognizer [target duration status]
   Recognizer
-  (handle-signal
+  (transition
    [this probe]
    (do
      (assert (not-ended? status))
-     (let [new-target (handle-signal target probe)
+     (let [new-target (transition target probe)
            new-status (:status new-target)
            {:keys [start finish]} new-status]
        (WithinRecognizer. new-target
@@ -327,11 +327,11 @@ new status from new target and probe."
 
 (defrecord WithoutRecognizer [target start finish status]
   Recognizer
-  (handle-signal
+  (transition
    [this probe]
    (do
      (assert (not-ended? status))
-     (let [new-target (handle-signal target probe)
+     (let [new-target (transition target probe)
            new-status (:status new-target)]
        (WithoutRecognizer. new-target
                            start

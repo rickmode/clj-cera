@@ -86,28 +86,28 @@
 (deftest base-recognizer-test
   (let [r (base (safing :mach1 :on))]
     (is (= :ignore
-           (-> (handle-signal r (safing :mach2 :on (date) (date)))
+           (-> (transition r (safing :mach2 :on (date) (date)))
                :status :value)))
     (is (= :complete
-           (-> (handle-signal r (safing :mach1 :on (date) (date)))
+           (-> (transition r (safing :mach1 :on (date) (date)))
                :status :value)))))
 
 (deftest out-of-state-base-recognizer-test
   (let [r1 (base (safing :mach1 :on))
-        r2 (handle-signal r1 (safing :mach1 :on (date) (date)))]
+        r2 (transition r1 (safing :mach1 :on (date) (date)))]
     (is (not-ended? (:status r1)))
     (is (complete? (:status r2)))
     (is (not (not-ended? (:status r2))))
     (is (thrown?
          AssertionError
-         (handle-signal r2 (safing :mach2 :on (date) (date))))
+         (transition r2 (safing :mach2 :on (date) (date))))
         "further signals should fail")))
 
 (deftest base-recognizer-recognized-test
   (let [s (safing :mach1 :on)
         r1 (base s)
         probe (safing :mach1 :on (date) (date))
-        r2 (handle-signal r1 probe)]
+        r2 (transition r1 probe)]
     (is (not-ended? (:status r1)))
     (is (complete? (:status r2)))
     (is (identical? probe (recognized r2)) "The recognized signal should be the probe signal (identical, not merely =)")))
@@ -117,8 +117,8 @@
         r1 (one s)
         probe1 (safing :mach1 :off (date) (date))
         probe2 (safing :mach1 :on (date) (date))
-        r2 (handle-signal r1 probe1)
-        r3 (handle-signal r2 probe2)]
+        r2 (transition r1 probe1)
+        r3 (transition r2 probe2)]
     (is (ignore? (:status r2)))
     (is (complete? (:status r3)))
     (is (identical? probe2 (recognized r3)))))
@@ -128,17 +128,17 @@
         s1a (safing :mach1 :on (date-sec 1) (date-sec 2))
         s2a (safing :mach2 :on (date-sec 3) (date-sec 4))
         s3a (safing :mach2 :on (date-sec 5) (date-sec 6))
-        r2a (handle-signal r1 s1a)
-        r3a (handle-signal r2a s2a)
+        r2a (transition r1 s1a)
+        r3a (transition r2a s2a)
         ;; second path
         s1b (safing :mach2 :on (date-sec 1) (date-sec 2))
         s2b (safing :mach1 :on (date-sec 3) (date-sec 4))
         s3b (safing :mach3 :on (date-sec 5) (date-sec 6))
         s4b (safing :mach2 :on (date-sec 7) (date-sec 8))
-        r2b (handle-signal r1 s1b) 
-        r3b (handle-signal r2b s2b) 
-        r4b (handle-signal r3b s3b) 
-        r5b (handle-signal r3b s4b)]
+        r2b (transition r1 s1b) 
+        r3b (transition r2b s2b) 
+        r4b (transition r3b s3b) 
+        r5b (transition r3b s4b)]
     (is (not-ended? (:status r1)))
     (is (not-ended? (:status r2a)))
     (is (active? (:status r2a)))
@@ -147,7 +147,7 @@
     (is (= [s1a s2a] (recognized r3a)))
     (is (= (:start s1a) (:start (:status r3a))))
     (is (= (:finish s2a) (:finish (:status r3a))))
-    (is (thrown? AssertionError (handle-signal r3a s3a)))
+    (is (thrown? AssertionError (transition r3a s3a)))
     ;; now check second path
     (is (ignore? (:status r2b)))
     (is (active? (:status r3b)))
@@ -164,20 +164,20 @@
         s1 (safing :mach1 :on (date-sec 1) (date-sec 2))
         s2 (safing :mach2 :on (date-sec 3) (date-sec 4))
         s3 (safing :mach2 :on (date-sec 5) (date-sec 6))
-        r2 (handle-signal r1 s1)
-        r3 (handle-signal r2 s2)
-        r4 (handle-signal r3 s3)]
+        r2 (transition r1 s1)
+        r3 (transition r2 s2)
+        r4 (transition r3 s3)]
     (is (active? (:status r2)))
     (is (active? (:status r3)))
     (is (futile? (:status r4)))
-    (is (thrown? AssertionError (handle-signal r4 s3)))))
+    (is (thrown? AssertionError (transition r4 s3)))))
 
 (deftest in-order-contra-test-2
   (let [r1 (in-order (contravene-any (a-sig 1))
                      (a-sig 2)
                      (a-sig 3))
         s1 (a-sig 2 (date-sec 1) (date-sec 2))
-        r2 (handle-signal r1 s1)]
+        r2 (transition r1 s1)]
     (is (futile? (:status r2)))
     (is (= (-> r2 :status :start) nil))
     (is (= (-> r2 :status :finish) (date-sec 2)))))
@@ -186,8 +186,8 @@
   (let [r1 (all (safing :mach1 :on))
         s1 (safing :mach2 :on (date-sec 1) (date-sec 2))
         s2 (safing :mach1 :on (date-sec 3) (date-sec 4))
-        r2 (handle-signal r1 s1)
-        r3 (handle-signal r2 s2)]
+        r2 (transition r1 s1)
+        r3 (transition r2 s2)]
     (is (= (count (:remainder r1)) 1))
     (is (= (count (:seen r1)) 0))
     (is (nil? (-> r1 :status :value)))
@@ -209,10 +209,10 @@
         s2 (safing :mach3 :on (date-sec 3) (date-sec 4))
         s3 (make-signal ::Whaa 0 (date-sec 5) (date-sec 6))
         s4 (safing :mach2 :on (date-sec 7) (date-sec 8))
-        r2 (handle-signal r1 s1)
-        r3 (handle-signal r2 s2)
-        r4 (handle-signal r3 s3)
-        r5 (handle-signal r4 s4)
+        r2 (transition r1 s1)
+        r3 (transition r2 s2)
+        r4 (transition r3 s3)
+        r5 (transition r4 s4)
         recog (recognized r5)
         tgts [(safing :mach1 :on) (safing :mach3 :on) (safing :mach2 :on)]]
     (is (= (count (:remainder r1)) 3))
@@ -241,12 +241,12 @@
         bar (a-sig "bar")
         foobar (a-sig "foobar")
         r1 (all foo (in-order baa bar) foobar)
-        r2 (handle-signal r1 (a-sig "bar" (date-sec 1) (date-sec 2)))
-        r3 (handle-signal r2 (a-sig "baa" (date-sec 3) (date-sec 4)))
-        r4 (handle-signal r3 (a-sig "foobar" (date-sec 5) (date-sec 6)))
-        r5 (handle-signal r4 (a-sig "foobar" (date-sec 7) (date-sec 8)))
-        r6 (handle-signal r5 (a-sig "foo" (date-sec 9) (date-sec 10)))
-        r7 (handle-signal r6 (a-sig "bar" (date-sec 11) (date-sec 12)))]
+        r2 (transition r1 (a-sig "bar" (date-sec 1) (date-sec 2)))
+        r3 (transition r2 (a-sig "baa" (date-sec 3) (date-sec 4)))
+        r4 (transition r3 (a-sig "foobar" (date-sec 5) (date-sec 6)))
+        r5 (transition r4 (a-sig "foobar" (date-sec 7) (date-sec 8)))
+        r6 (transition r5 (a-sig "foo" (date-sec 9) (date-sec 10)))
+        r7 (transition r6 (a-sig "bar" (date-sec 11) (date-sec 12)))]
     (is (ignore? (:status r2)))
     (is (active? (:status r3)))
     (is (active? (:status r4)))
@@ -256,8 +256,8 @@
 
 (deftest all-contra-test-1
   (let [r1 (all (contravene-any (a-sig 1)) (a-sig 2) (a-sig 3))
-        r2 (handle-signal r1 (a-sig 1 (date-sec 1) (date-sec 2)))
-        r3 (handle-signal r2 (a-sig 4 (date-sec 3) (date-sec 4)))]
+        r2 (transition r1 (a-sig 1 (date-sec 1) (date-sec 2)))
+        r3 (transition r2 (a-sig 4 (date-sec 3) (date-sec 4)))]
     (is (active? (:status r2)))
     (is (futile? (:status r3)))
     (is (= (date-sec 1) (-> r3 :status :start)))
@@ -265,10 +265,10 @@
 
 (deftest all-contra-test-2
   (let [r1 (all (a-sig 1) (contravene-same (a-sig 2)) (a-sig 3))
-        r2 (handle-signal r1 (a-sig 3 (date-sec 1) (date-sec 2)))
-        r3 (handle-signal r2 (a-sig 4 (date-sec 3) (date-sec 4)))
-        r4 (handle-signal r3 (a-sig 2 (date-sec 5) (date-sec 6)))
-        r5 (handle-signal r4 (a-sig 2 (date-sec 7) (date-sec 8)))]
+        r2 (transition r1 (a-sig 3 (date-sec 1) (date-sec 2)))
+        r3 (transition r2 (a-sig 4 (date-sec 3) (date-sec 4)))
+        r4 (transition r3 (a-sig 2 (date-sec 5) (date-sec 6)))
+        r5 (transition r4 (a-sig 2 (date-sec 7) (date-sec 8)))]
     (is (active? (:status r2)))
     (is (ignore? (:status r3)))
     (is (active? (:status r4)))
@@ -278,8 +278,8 @@
 
 (deftest one-of-test-1
   (let [r1 (one-of (a-sig 1) (a-sig 2) (a-sig 3))
-        r2 (handle-signal r1 (a-sig 4 (date-sec 1) (date-sec 2)))
-        r3 (handle-signal r2 (a-sig 2 (date-sec 3) (date-sec 4)))]
+        r2 (transition r1 (a-sig 4 (date-sec 1) (date-sec 2)))
+        r3 (transition r2 (a-sig 2 (date-sec 3) (date-sec 4)))]
     (is (active? (:status r2)))
     (is (nil? (-> r2 :status :start)))
     (is (= (date-sec 2) (-> r2 :status :finish)))   
@@ -294,12 +294,12 @@
                    (all (a-sig 1)
                         (a-sig 2)
                         (a-sig "foobar")))
-        r2 (handle-signal r1 (a-sig 1 (date-sec 1) (date-sec 2)))
-        r3 (handle-signal r2 (a-sig "bar" (date-sec 3) (date-sec 4)))
-        r4 (handle-signal r3 (a-sig "baa" (date-sec 5) (date-sec 6)))
-        r5 (handle-signal r4 (a-sig "foobar" (date-sec 7) (date-sec 8)))
-        r6 (handle-signal r5 (a-sig "foobar" (date-sec 9) (date-sec 10)))
-        r7 (handle-signal r6 (a-sig 2 (date-sec 11) (date-sec 12)))]
+        r2 (transition r1 (a-sig 1 (date-sec 1) (date-sec 2)))
+        r3 (transition r2 (a-sig "bar" (date-sec 3) (date-sec 4)))
+        r4 (transition r3 (a-sig "baa" (date-sec 5) (date-sec 6)))
+        r5 (transition r4 (a-sig "foobar" (date-sec 7) (date-sec 8)))
+        r6 (transition r5 (a-sig "foobar" (date-sec 9) (date-sec 10)))
+        r7 (transition r6 (a-sig 2 (date-sec 11) (date-sec 12)))]
     (is (active? (:status r2)))
     (is (nil? (-> r2 :status :start)))
     (is (= (date-sec 2) (-> r2 :status :finish)))   
@@ -321,9 +321,9 @@
 
 (deftest within-test-1
   (let [r1 (within (a-sig 1) 5000)
-        r2a (handle-signal r1 (a-sig 1 (date-sec 1) (date-sec 5)))
-        r2b (handle-signal r1 (a-sig 2 (date-sec 2) (date-sec 6)))
-        r3b (handle-signal r2b (a-sig 1 (date-sec 1) (date-sec 10)))]
+        r2a (transition r1 (a-sig 1 (date-sec 1) (date-sec 5)))
+        r2b (transition r1 (a-sig 2 (date-sec 2) (date-sec 6)))
+        r3b (transition r2b (a-sig 1 (date-sec 1) (date-sec 10)))]
     (is (complete? (:status r2a)))
     (is (= (date-sec 1) (-> r2a :status :start)))
     (is (= (date-sec 5) (-> r2a :status :finish)))
@@ -336,10 +336,10 @@
 
 (deftest within-test-2
   (let [r1 (within (in-order (a-sig "foo") (a-sig "bar")) 10000)
-        r2 (handle-signal r1 (a-sig "bar" (date-sec 1) (date-sec 10)))
-        r3 (handle-signal r2 (a-sig "foo" (date-sec 1) (date-sec 10)))
-        r4 (handle-signal r3 (a-sig "car" (date-sec 2) (date-sec 11)))
-        r5 (handle-signal r4 (a-sig "bar" (date-sec 3) (date-sec 20)))]
+        r2 (transition r1 (a-sig "bar" (date-sec 1) (date-sec 10)))
+        r3 (transition r2 (a-sig "foo" (date-sec 1) (date-sec 10)))
+        r4 (transition r3 (a-sig "car" (date-sec 2) (date-sec 11)))
+        r5 (transition r4 (a-sig "bar" (date-sec 3) (date-sec 20)))]
     (is (ignore? (:status r2)))
     (is (nil? (-> r2 :status :start)))
     (is (= (date-sec 10) (-> r2 :status :finish)))
@@ -358,10 +358,10 @@
                         (a-sig 2)
                         (a-sig 3))
                    15000)
-        r2 (handle-signal r1 (a-sig 2 (date-sec 5) (date-sec 10)))
-        r3 (handle-signal r2 (a-sig 2 (date-sec 6) (date-sec 11)))
-        r4 (handle-signal r3 (a-sig 3 (date-sec 7) (date-sec 12)))
-        r5 (handle-signal r4 (a-sig 1 (date-sec 8) (date-sec 13)))]
+        r2 (transition r1 (a-sig 2 (date-sec 5) (date-sec 10)))
+        r3 (transition r2 (a-sig 2 (date-sec 6) (date-sec 11)))
+        r4 (transition r3 (a-sig 3 (date-sec 7) (date-sec 12)))
+        r5 (transition r4 (a-sig 1 (date-sec 8) (date-sec 13)))]
     (is (active? (:status r2)))
     (is (= (date-sec 5) (-> r2 :status :start)))
     (is (= (date-sec 10) (-> r2 :status :finish)))
@@ -373,9 +373,9 @@
 
 (deftest without-test-1
   (let [r1 (without (a-sig 1) (date-sec 5) (date-sec 10))
-        r2a (handle-signal r1 (a-sig 1 (date-sec 1) (date-sec 4)))
-        r2b (handle-signal r1 (a-sig 2 (date-sec 2) (date-sec 6)))
-        r3b (handle-signal r2b (a-sig 1 (date-sec 1) (date-sec 5)))]
+        r2a (transition r1 (a-sig 1 (date-sec 1) (date-sec 4)))
+        r2b (transition r1 (a-sig 2 (date-sec 2) (date-sec 6)))
+        r3b (transition r2b (a-sig 1 (date-sec 1) (date-sec 5)))]
     (is (complete? (:status r2a)))
     (is (= (date-sec 1) (-> r2a :status :start)))
     (is (= (date-sec 4) (-> r2a :status :finish)))
@@ -391,10 +391,10 @@
                                       (a-sig "bar"))
                             5000)
                     (date-sec 10) (date-sec 20))
-        r2 (handle-signal r1 (a-sig "bar" (date-sec 1) (date-sec 10)))
-        r3 (handle-signal r2 (a-sig "foo" (date-sec 1) (date-sec 10)))
-        r4 (handle-signal r3 (a-sig "car" (date-sec 2) (date-sec 11)))
-        r5 (handle-signal r4 (a-sig "bar" (date-sec 3) (date-sec 9)))]
+        r2 (transition r1 (a-sig "bar" (date-sec 1) (date-sec 10)))
+        r3 (transition r2 (a-sig "foo" (date-sec 1) (date-sec 10)))
+        r4 (transition r3 (a-sig "car" (date-sec 2) (date-sec 11)))
+        r5 (transition r4 (a-sig "bar" (date-sec 3) (date-sec 9)))]
     (is (ignore? (:status r2)))
     (is (nil? (-> r2 :status :start)))
     (is (= (date-sec 10) (-> r2 :status :finish)))
@@ -413,10 +413,10 @@
                          (a-sig 2)
                          (a-sig 3))
                     (date-sec 15) (date-sec 100))
-        r2 (handle-signal r1 (a-sig 2 (date-sec 5) (date-sec 10)))
-        r3 (handle-signal r2 (a-sig 2 (date-sec 6) (date-sec 11)))
-        r4 (handle-signal r3 (a-sig 3 (date-sec 7) (date-sec 12)))
-        r5 (handle-signal r4 (a-sig 1 (date-sec 8) (date-sec 16)))]
+        r2 (transition r1 (a-sig 2 (date-sec 5) (date-sec 10)))
+        r3 (transition r2 (a-sig 2 (date-sec 6) (date-sec 11)))
+        r4 (transition r3 (a-sig 3 (date-sec 7) (date-sec 12)))
+        r5 (transition r4 (a-sig 1 (date-sec 8) (date-sec 16)))]
     (is (active? (:status r2)))
     (is (= (date-sec 5) (-> r2 :status :start)))
     (is (= (date-sec 10) (-> r2 :status :finish)))
