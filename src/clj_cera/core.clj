@@ -4,8 +4,6 @@
 ;; General note: all times are in milliseconds.
 ;; So all start and finish values are numbers, not java.util.Dates.
 
-;; valid-statuses are #{:complete :active :ignore :futile}
-
 ;; Status type
 ;; value - can be nil or one of :complete :active :ignore :futile
 ;; start - the start time of this status in milliseconds
