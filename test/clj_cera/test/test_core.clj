@@ -115,19 +115,19 @@
 
 (defn a-sig-range
   "Create a base recognizer matching a range of a-sig signals"
-  [begin end] (base-pred (fn [{:keys [tag data]}]
-                           (and (= tag ::A)
-                                (>= data begin)
-                                (<= data end)))))
+  [begin end] (base-match (fn [{:keys [tag data]}]
+                            (and (= tag ::A)
+                                 (>= data begin)
+                                 (<= data end)))))
 
-(deftest base-pred-test
+(deftest base-match-test
   (let [r1 (a-sig-range 10 20)
         r2 (transition r1 (a-sig 1 (date-sec 1) (date-sec 2)))
         r3 (transition r2 (a-sig 15 (date-sec 3) (date-sec 4)))]
     (is (ignore? (:status r2)))
     (is (complete? (:status r3)))))
 
-(deftest base-pred-in-order-test
+(deftest base-match-in-order-test
   (let [r1 (in-order (a-sig 1) (a-sig-range 10 20))
         r2 (transition r1 (a-sig 15))
         r3 (transition r2 (a-sig 1))

@@ -75,8 +75,8 @@
 
 ;; BaseRecognizer is cannot be composed of other recognizers, and thus is the
 ;; "base" of any recognizer system.
-;; The BaseRecognizer uses a predicate for matching, and another for
-;; contravention.
+;; The BaseRecognizer uses one predicate for matching, and another for
+;; contravention testing.
 (defrecord BaseRecognizer [match? contravention-match? seen status]
   Recognizer
   (transition [this probe] (do
@@ -93,7 +93,7 @@
   (contravened? [this probe] (and contravention-match?
                                   (contravention-match? probe))))
 
-(defn base-pred
+(defn base-match
   "Create a base predicate matching recognizer based on supplied predicates.
   The match? predicate should a function with no side effects that takes a single Signal as an argument.
   The optional contravention-match? predicate should also be a side-effect free function
@@ -104,17 +104,17 @@
 (defn base
   "Create a base recognizer that matches on the signal-eq? predicate
   and contravenes nothing."
-  [signal] (base-pred (partial signal-eq? signal)))
+  [signal] (base-match (partial signal-eq? signal)))
 
 (defn contravene-any
   "Create a base recognizer that also contravenes any other signal."
-  [signal] (base-pred (partial signal-eq? signal) (constantly true)))
+  [signal] (base-match (partial signal-eq? signal) (constantly true)))
 
 (defn contravene-same
   "Crease a base recognizer that also contravenes when this signal
   is signal-eq? with the probe signal."
-  [signal] (let [partial-eq? (partial signal-eq? signal)]
-              (base-pred partial-eq? partial-eq?)))
+  [signal] (let [match? (partial signal-eq? signal)]
+              (base-match match? match?)))
 
 (defn to-recognizer
   "Ensures element is a recognizer. Wraps non-recognizers in a base recognizer."
