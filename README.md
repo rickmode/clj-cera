@@ -1,6 +1,6 @@
 # clj-cera
 
-Clojure version of the Complex Event Recognition Architecture (CERA).
+Clojure port of the Complex Event Recognition Architecture (CERA).
 
 See:
 http://www.entish.org/published/P2338-fitzgerald.pdf
