@@ -1,6 +1,6 @@
-(ns rule-engine.test.test-cera
-  (:use [rule-engine.cera] :reload)
-  (:use [rule-engine.utils])
+(ns clj-cera.test.test-core
+  (:use [clj-cera.core] :reload)
+  (:use [clj-cera.utils] :reload)
   (:use [clojure.test]))
 
 (defn safing

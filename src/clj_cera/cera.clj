@@ -1,5 +1,5 @@
-(ns rule-engine.cera
-  (:use [rule-engine.utils :only [dbg pdbg]]))
+(ns clj-cera.core
+  (:use [clj-cera.utils :only [dbg pdbg]]))
 
 ;; General note: all times are in milliseconds.
 ;; So all start and finish values are numbers, not java.util.Dates.

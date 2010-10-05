@@ -1,4 +1,4 @@
-(ns rule-engine.utils
+(ns clj-cera.utils
   (:use [clojure.pprint :only [pprint]]))
 
 (defmacro dbg
