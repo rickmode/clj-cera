@@ -14,6 +14,7 @@
   ([datum] (a-sig datum nil nil))
   ([datum start finish] (make-signal ::A datum start finish)))
 
+
 (deftest status-test
   (let [e empty-status
         e1 (make-status nil (date) (date))
@@ -111,6 +112,31 @@
     (is (not-ended? (:status r1)))
     (is (complete? (:status r2)))
     (is (identical? probe (recognized r2)) "The recognized signal should be the probe signal (identical, not merely =)")))
+
+(defn a-sig-range
+  "Create a base recognizer matching a range of a-sig signals"
+  [begin end] (base-pred (fn [{:keys [tag data]}]
+                           (and (= tag ::A)
+                                (>= data begin)
+                                (<= data end)))))
+
+(deftest base-pred-test
+  (let [r1 (a-sig-range 10 20)
+        r2 (transition r1 (a-sig 1 (date-sec 1) (date-sec 2)))
+        r3 (transition r2 (a-sig 15 (date-sec 3) (date-sec 4)))]
+    (is (ignore? (:status r2)))
+    (is (complete? (:status r3)))))
+
+(deftest base-pred-in-order-test
+  (let [r1 (in-order (a-sig 1) (a-sig-range 10 20))
+        r2 (transition r1 (a-sig 15))
+        r3 (transition r2 (a-sig 1))
+        r4 (transition r3 (a-sig 2))
+        r5 (transition r4 (a-sig 11))]
+    (is (ignore? (:status r2)))
+    (is (active? (:status r3)))
+    (is (ignore? (:status r4)))
+    (is (complete? (:status r5)))))
 
 (deftest one-recognizer-test
   (let [s (safing :mach1 :on)
