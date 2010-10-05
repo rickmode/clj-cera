@@ -4,11 +4,14 @@
 ;; General note: all times are in milliseconds.
 ;; So all start and finish values are numbers, not java.util.Dates.
 
-(defrecord Status [value start finish])
+;; valid-statuses are #{:complete :active :ignore :futile}
 
-;; status values can be any of the following
-;; (TODO: so far this isn't used)
-(def valid-statuses #{:complete :active :ignore :futile})
+;; Status type
+;; value - can be nil or one of :complete :active :ignore :futile
+;; start - the start time of this status in milliseconds
+;;         this will be nil for non-ended statuses
+;; finish - the finish (end) time of this status in milliseconds
+(defrecord Status [value start finish])
 
 (defn make-status
   "Create a Status."
@@ -19,7 +22,8 @@
   ([value start finish]
      (Status. value start finish)))
 
-;; empty statuses can always share a single constant since would all be identical
+;; An empty status has all nil values, so all instances are the same,
+;; thus a single object is enough for all cases.
 (def empty-status (make-status))
 
 (defn active? [status]
@@ -37,7 +41,11 @@
 (defn not-ended? [status]
   (let [v (:value status)] (and (not= v :complete) (not= v :futile))))
 
-
+;; Signal type
+;; tag - type of this signal
+;; data - the actual data of the signal - can be anything
+;; start - the start time of this signal in milliseconds
+;; finish - the finish (end) time of this signal in milliseconds
 (defrecord Signal [tag data start finish])
 
 (defn make-signal
@@ -49,7 +57,8 @@
 
 (defn signal-eq? [sig1 sig2]
   "Two signals are equal when their tag (type) and data are equal.
-Start and finish times are ignored when matching signal patterns this way."
+  This is intended for recognizer signal matching and so the
+  start and finish times are ignored."
   (and (= (:tag sig1) (:tag sig2))
        (= (:data sig1) (:data sig2))))
 
@@ -60,14 +69,19 @@ Start and finish times are ignored when matching signal patterns this way."
               "Returns a recognizer in its next state based on the probe signal.")
   (recognized [this]
               "Returns all matched signals recognized.")
-  (contravened? [this probe] "Is this recognizer contravened by probe."))
+  (contravened? [this probe]
+                "Is this recognizer contravened by the probe signal."))
 
 
-(defrecord PredicateRecognizer [predicate? contravention-predicate? seen status]
+;; BaseRecognizer is cannot be composed of other recognizers, and thus is the
+;; "base" of any recognizer system.
+;; The BaseRecognizer uses a predicate for matching, and another for
+;; contravention.
+(defrecord BaseRecognizer [match? contravention-match? seen status]
   Recognizer
   (transition [this probe] (do
                              (assert (not-ended? status))
-                             (if (predicate? probe)
+                             (if (match? probe)
                                (assoc this
                                  :seen probe
                                  :status (make-status :complete (:start probe) (:finish probe)))
@@ -76,31 +90,31 @@ Start and finish times are ignored when matching signal patterns this way."
 
   (recognized [this] seen)
 
-  (contravened? [this probe] (and contravention-predicate?
-                                  (contravention-predicate? probe))))
+  (contravened? [this probe] (and contravention-match?
+                                  (contravention-match? probe))))
 
-(defn pred
-  "Create a genaral predicate matching recognizer.
-The predicate? should a function with no side effects that takes a single Signal as an argument.
-The optional contravention-predicate? should also be a side-effect free function
-taking a single Signal argument."
-  ([predicate?] (PredicateRecognizer. predicate? nil nil empty-status))
-  ([predicate? contravention-predicate?] (PredicateRecognizer. predicate? contravention-predicate? nil empty-status)))
+(defn base-pred
+  "Create a base predicate matching recognizer based on supplied predicates.
+  The match? predicate should a function with no side effects that takes a single Signal as an argument.
+  The optional contravention-match? predicate should also be a side-effect free function
+  taking a single Signal argument."
+  ([match?] (BaseRecognizer. match? nil nil empty-status))
+  ([match? contravention-match?] (BaseRecognizer. match? contravention-match? nil empty-status)))
 
 (defn base
-  "Create a base recognizer that completes when signal matches probe via signal-eq?
-and contravenes nothing."
-  [signal] (pred (partial signal-eq? signal)))
+  "Create a base recognizer that matches on the signal-eq? predicate
+  and contravenes nothing."
+  [signal] (base-pred (partial signal-eq? signal)))
 
 (defn contravene-any
   "Create a base recognizer that also contravenes any other signal."
-  [signal] (pred (partial signal-eq? signal) (constantly true)))
+  [signal] (base-pred (partial signal-eq? signal) (constantly true)))
 
 (defn contravene-same
   "Crease a base recognizer that also contravenes when this signal
-is signal-eq? with the probe signal."
+  is signal-eq? with the probe signal."
   [signal] (let [partial-eq? (partial signal-eq? signal)]
-              (pred partial-eq? partial-eq?)))
+              (base-pred partial-eq? partial-eq?)))
 
 (defn to-recognizer
   "Ensures element is a recognizer. Wraps non-recognizers in a base recognizer."
@@ -113,12 +127,10 @@ is signal-eq? with the probe signal."
 
 (defrecord OneRecognizer [target status]
   Recognizer
-  (transition
-   [this probe]
-   (do
-     (assert (not-ended? status))
-     (let [new-target (transition target probe)]
-       (OneRecognizer. new-target (:status new-target)))))
+  (transition [this probe] (do
+                             (assert (not-ended? status))
+                             (let [new-target (transition target probe)]
+                               (OneRecognizer. new-target (:status new-target)))))
 
   (recognized [this] (if target (recognized target) nil))
 
@@ -129,7 +141,7 @@ is signal-eq? with the probe signal."
 
 (defn- next-status
   "Create a new status based on the start and finish times of current status,
-new status from new target and probe."
+  new status from new target and probe."
   [value status new-status probe]
   (make-status value
                (or (:start status)      ; maintain start if set
