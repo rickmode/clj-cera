@@ -132,7 +132,7 @@
                              (let [new-target (transition target probe)]
                                (OneRecognizer. new-target (:status new-target)))))
 
-  (recognized [this] (if target (recognized target) nil))
+  (recognized [this] (recognized target))
 
   (contravened? [this probe] false))
 
