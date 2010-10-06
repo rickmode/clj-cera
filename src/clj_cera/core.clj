@@ -1,5 +1,5 @@
 (ns clj-cera.core
-  (:use [clj-cera.utils :only [dbg pdbg]]))
+  (:use [clj-cera.utils :only [single? dbg pdbg]]))
 
 ;; General note: all times are in milliseconds.
 ;; So all start and finish values are numbers, not java.util.Dates.
@@ -202,11 +202,8 @@
                      new-target (transition target probe)
                      new-st (:status new-target)]
                  (case (:value new-st)
-                       ;; if this is the last remainder, this recognizer is complete
-                       ;; otherwise it is still active
-                       ;; (and first not next is equivalent to count == 1)
                        :complete
-                       (if (and (first rmdr) (not (next rmdr)))
+                       (if (single? rmdr) ; if last rmdr
                          (AllRecognizer. (conj sn new-target)
                                          '()
                                          (next-status :complete st new-st probe))

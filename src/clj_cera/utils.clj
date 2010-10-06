@@ -21,3 +21,11 @@ http://learnclojure.blogspot.com/2010/09/clojure-macro-tutorial-part-i-getting.h
 
 (defn date-min
   [m] (date (* m 60 1000)))
+
+(defn single?
+  "Is this a collection with exactly one element?
+  (Clojure version of single? in On Lisp, page 45.)"
+  [coll]
+  (and (coll? coll)
+       (first coll)
+       (not (next coll))))
