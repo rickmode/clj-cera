@@ -10,7 +10,7 @@ See the following for more information on CERA:
 
 In the discussion below, I'm assuming the reader is familiar with the first paper above and so understands the gist of CERA and the meaning of signals, patterns and recognizers in this context.
 
-Clj-cera is an exercise in porting the original object-oriented (OO) version of CERA into idiomatic Clojure. It uses a records (via `defrecord`) for `Status` and `Signal` types, a `Recognizer` protocol, and each recognizer implements this protocol via different `defrecord` types. The Clojure implementation relies on the polymorphism in the `Recognizer` protocol. This polymorphism allows the recognizers to be nested together.
+Clj-cera is an exercise in porting the original object-oriented (OO) version of CERA into idiomatic Clojure. It uses a records (via `defrecord`) for `Status` and `Signal` types, a `Recognizer` protocol, and each recognizer implements this protocol via different `defrecord` types. The Clojure implementation relies on the polymorphism in the `Recognizer` protocol, which allows the recognizers to be nested together.
 
 The `Recognizer` protocol defines three methods: `transition`, `recognized` and `contravened?`. The `Recognizer`s of the original CERA code had `signal`, which I renamed to transition to avoid confusion between the signal type and the signal action (noun and verb confusion). My `contravened?` method is the same as the original `is_contravened` and `isContravened` (the Python and C++ names). I've added the `recognized` method, which returns a sequence of actual `Signal`s a recognizer has recognized (matched) once it has completed.
 
@@ -19,6 +19,10 @@ Perhaps the largest (and mind-bending) change is that clj-cera's recognizers are
 The Python and C++ code use an immutable `Pattern` class, which is not needed in this Clojure version since the recognizers are immutable. So instead of creating a `Pattern` object and calling `make-recognizer`, one can simply keep reuse the initial recognizer over and over.
 
 The `BaseRecognizer` (the bottom-most recognizer that actually matches signals and does not allow deeper nesting) is more generalized than the original OO version, allowing arbitrary predicates for the signal and contravention matching. The CERA paper discusses arbitrary predicates, however the OO code only allows for signals with matching data.
+
+A small change is that the clj-cera recognizers do not hold a callback. In the original OO code, the recognizers held a callback passed to them via the `Pattern` `make_recognizer` method, but do not themselves use this callback, so it's just a place for the higher level `Agenda` to hold them until they are necessary. Further, only top-level recognizers even use this callback, so the slot is wasted for all nested recognizers. If clj-cera is carried further, this callback mechanism would fit in a layer around recognizers, and not the recognizers themselves. 
+
+The current implementation does not implement the Allen recognizers (though I do not see any hurdles doing so). It also doesn't have an `Agenda` implementation, which is essentially the manager that pumps signals to the various active recognizers.
 
 ## Usage
 
