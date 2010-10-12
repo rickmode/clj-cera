@@ -24,8 +24,7 @@ http://learnclojure.blogspot.com/2010/09/clojure-macro-tutorial-part-i-getting.h
 
 (defn single?
   "Is this a collection with exactly one element?
-  (Clojure version of single? in On Lisp, page 45.)"
+  (Clojure version of single? in On Lisp, Chapter 4, page 45.)"
   [coll]
   (and (coll? coll)
-       (first coll)
        (not (next coll))))
