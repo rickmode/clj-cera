@@ -96,8 +96,11 @@
   The match? predicate should a function with no side effects that takes a single Signal as an argument.
   The optional contravention-match? predicate should also be a side-effect free function
   taking a single Signal argument."
-  ([match?] (BaseRecognizer. match? nil nil empty-status))
-  ([match? contravention-match?] (BaseRecognizer. match? contravention-match? nil empty-status)))
+  ([match?] (base-match match? nil))
+  ([match? contravention-match?]
+     {:pre [(fn? match?) (or (nil? contravention-match?) (fn? contravention-match?))]}
+     (BaseRecognizer. match? contravention-match? nil empty-status)))
+  
 
 (defn base
   "Create a base recognizer that matches on the signal-eq? predicate
