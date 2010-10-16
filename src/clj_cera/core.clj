@@ -24,20 +24,15 @@
 ;; thus a single object is enough for all cases.
 (def empty-status (make-status))
 
-(defn active? [status]
-  (= (:value status) :active))
+(defn active? [{v :value}] (= v :active))
 
-(defn ignore? [status]
-  (= (:value status) :ignore))
+(defn ignore? [{v :value}] (= v :ignore))
 
-(defn complete? [status]
-  (= (:value status) :complete))
+(defn complete? [{v :value}] (= v :complete))
 
-(defn futile? [status]
-  (= (:value status) :futile))
+(defn futile? [{v :value}] (= v :futile))
 
-(defn not-ended? [status]
-  (let [v (:value status)] (and (not= v :complete) (not= v :futile))))
+(defn not-ended? [{v :value}] (and (not= v :complete) (not= v :futile)))
 
 ;; Signal type
 ;; tag - type of this signal
@@ -53,12 +48,12 @@
   ([tag data start finish]
      (Signal. tag data start finish)))
 
-(defn signal-eq? [sig1 sig2]
+(defn signal-eq? [{t1 :tag, d1 :data} {t2 :tag, d2 :data}]
   "Two signals are equal when their tag (type) and data are equal.
   This is intended for recognizer signal matching and so the
   start and finish times are ignored."
-  (and (= (:tag sig1) (:tag sig2))
-       (= (:data sig1) (:data sig2))))
+  (and (= t1 t2)
+       (= d1 d2)))
 
 
 (defprotocol Recognizer
@@ -68,7 +63,7 @@
   (recognized [this]
               "Returns all matched signals recognized.")
   (contravened? [this probe]
-                "Is this recognizer contravened by the probe signal."))
+                "Tests if this recognizer is contravened by the probe signal."))
 
 
 ;; BaseRecognizer is cannot be composed of other recognizers, and thus is the

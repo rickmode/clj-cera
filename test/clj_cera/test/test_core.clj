@@ -225,7 +225,7 @@
     (is (= (-> r3 :status :start) (date-sec 3)))
     (is (= (-> r3 :status :finish) (date-sec 4)))
     (is (= (count (:seen r3)) 1))
-    (is (signal-eq? (recognized r3) [(safing :mach1 :on)]))))
+    (is (signal-eq? (first (recognized r3)) (safing :mach1 :on)))))
 
 (deftest all-test-2
   (let [r1 (all (safing :mach1 :on)
