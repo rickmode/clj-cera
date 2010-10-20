@@ -48,12 +48,12 @@
   ([tag data start finish]
      (Signal. tag data start finish)))
 
-(defn signal-eq? [{t1 :tag, d1 :data} {t2 :tag, d2 :data}]
+(defn signal-eq?
   "Two signals are equal when their tag (type) and data are equal.
   This is intended for recognizer signal matching and so the
   start and finish times are ignored."
-  (and (= t1 t2)
-       (= d1 d2)))
+  [{t1 :tag, d1 :data} {t2 :tag, d2 :data}]
+  (and (= t1 t2) (= d1 d2)))
 
 
 (defprotocol Recognizer
