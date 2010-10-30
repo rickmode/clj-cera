@@ -59,11 +59,11 @@
 (defprotocol Recognizer
   "A recognizer tracks the state of detecting a pattern."
   (transition [this probe]
-              "Returns a recognizer in its next state based on the probe signal.")
+    "Returns a recognizer in its next state based on the probe signal.")
   (recognized [this]
-              "Returns all matched signals recognized.")
+    "Returns all matched signals recognized.")
   (contravened? [this probe]
-                "Tests if this recognizer is contravened by the probe signal."))
+    "Tests if this recognizer is contravened by the probe signal."))
 
 
 ;; BaseRecognizer is cannot be composed of other recognizers, and thus is the
@@ -73,13 +73,13 @@
 (defrecord BaseRecognizer [match? contravention-match? seen status]
   Recognizer
   (transition [this probe]
-              (assert (not-ended? status))
-              (if (match? probe)
-                (assoc this
-                  :seen probe
-                  :status (make-status :complete (:start probe) (:finish probe)))
-                (assoc this
-                  :status (make-status :ignore nil (:finish probe)))))
+    (assert (not-ended? status))
+    (if (match? probe)
+      (assoc this
+        :seen probe
+        :status (make-status :complete (:start probe) (:finish probe)))
+      (assoc this
+        :status (make-status :ignore nil (:finish probe)))))
 
   (recognized [this] seen)
 
@@ -124,9 +124,9 @@
 (defrecord OneRecognizer [target status]
   Recognizer
   (transition [this probe]
-              (assert (not-ended? status))
-              (let [new-target (transition target probe)]
-                (OneRecognizer. new-target (:status new-target))))
+    (assert (not-ended? status))
+    (let [new-target (transition target probe)]
+      (OneRecognizer. new-target (:status new-target))))
 
   (recognized [this] (recognized target))
 
@@ -147,31 +147,31 @@
 (defrecord InOrderRecognizer [seen remainder status]
   Recognizer
   (transition [this probe]
-              (assert (not-ended? status))
-              (let [new-target (transition (first remainder) probe)
-                    new-status (:status new-target)
-                    next-remainder (next remainder)]
-                (case (:value new-status)
-                      :complete
-                      (InOrderRecognizer. (conj seen new-target)
-                                          next-remainder
-                                          (next-status (if next-remainder
-                                                         :active
-                                                         :complete)
-                                                       status new-status probe))
-                      :active
-                      (InOrderRecognizer. seen
-                                          (conj next-remainder new-target) ; updating target
-                                          (next-status :active status new-status probe))
-                      :ignore
-                      (assoc this :status
-                             (next-status (if (or (contravened? new-target probe)
-                                                  (contravened? this probe))
-                                            :futile
-                                            :ignore)
-                                          status new-status probe))
-                      (assoc this :status
-                             (next-status :futile status new-status probe)))))
+    (assert (not-ended? status))
+    (let [new-target (transition (first remainder) probe)
+          new-status (:status new-target)
+          next-remainder (next remainder)]
+      (case (:value new-status)
+            :complete
+            (InOrderRecognizer. (conj seen new-target)
+                                next-remainder
+                                (next-status (if next-remainder
+                                               :active
+                                               :complete)
+                                             status new-status probe))
+            :active
+            (InOrderRecognizer. seen
+                                (conj next-remainder new-target) ; updating target
+                                (next-status :active status new-status probe))
+            :ignore
+            (assoc this :status
+                   (next-status (if (or (contravened? new-target probe)
+                                        (contravened? this probe))
+                                  :futile
+                                  :ignore)
+                                status new-status probe))
+            (assoc this :status
+                   (next-status :futile status new-status probe)))))
 
   (recognized [this] (reverse (map recognized seen)))
 
@@ -183,52 +183,52 @@
 (defrecord AllRecognizer [seen remainder status]
   Recognizer
   (transition [this probe]
-              (assert (not-ended? status))
-              ;; new-recognizer will be final result of iteratively signaling
-              ;; current remainders with probe (the targets loop binding).
-              (let [new-recognizer
-                    (loop [sn seen
-                           rmdr remainder
-                           st (assoc status :value :ignore)
-                           targets remainder]
-                      (if targets
-                        (let [target (first targets)
-                              new-target (transition target probe)
-                              new-st (:status new-target)]
-                          (case (:value new-st)
-                                :complete
-                                (if (single? rmdr) ; if last rmdr
-                                  (AllRecognizer. (conj sn new-target)
-                                                  '()
-                                                  (next-status :complete st new-st probe))
-                                  (recur (conj sn new-target)
-                                         (remove #(= % target) rmdr)
-                                         (next-status :active st new-st probe)
-                                         (next targets)))
-                                :active
-                                (recur sn
-                                       (replace {target new-target} rmdr)
-                                       (next-status :active st new-st probe)
-                                       (next targets))
-                                :futile
-                                (AllRecognizer. sn
-                                                rmdr
-                                                (next-status :futile st new-st probe))
-                                ;; default - ignore
-                                (recur sn rmdr st (next targets))))
-                        ;; else targets is nil - create final recognizer
-                        (AllRecognizer. sn rmdr st)))]
-                ;; done looping - check for contravention
-                (if (and (ignore? (:status new-recognizer))
-                         (contravened? new-recognizer probe))
-                  (assoc new-recognizer :status (make-status :futile (-> new-recognizer :status :start) (:finish probe)))
-                  new-recognizer)))
+    (assert (not-ended? status))
+    ;; new-recognizer will be final result of iteratively signaling
+    ;; current remainders with probe (the targets loop binding).
+    (let [new-recognizer
+          (loop [sn seen
+                 rmdr remainder
+                 st (assoc status :value :ignore)
+                 targets remainder]
+            (if targets
+              (let [target (first targets)
+                    new-target (transition target probe)
+                    new-st (:status new-target)]
+                (case (:value new-st)
+                      :complete
+                      (if (single? rmdr) ; if last rmdr
+                        (AllRecognizer. (conj sn new-target)
+                                        '()
+                                        (next-status :complete st new-st probe))
+                        (recur (conj sn new-target)
+                               (remove #(= % target) rmdr)
+                               (next-status :active st new-st probe)
+                               (next targets)))
+                      :active
+                      (recur sn
+                             (replace {target new-target} rmdr)
+                             (next-status :active st new-st probe)
+                             (next targets))
+                      :futile
+                      (AllRecognizer. sn
+                                      rmdr
+                                      (next-status :futile st new-st probe))
+                      ;; default - ignore
+                      (recur sn rmdr st (next targets))))
+              ;; else targets is nil - create final recognizer
+              (AllRecognizer. sn rmdr st)))]
+      ;; done looping - check for contravention
+      (if (and (ignore? (:status new-recognizer))
+               (contravened? new-recognizer probe))
+        (assoc new-recognizer :status (make-status :futile (-> new-recognizer :status :start) (:finish probe)))
+        new-recognizer)))
 
   (recognized [this] (reverse (map recognized seen)))
 
   (contravened? [this probe]
-                (let [contra? #(contravened? % probe)]
-                  (or (some contra? seen) (some contra? remainder)))))
+    (let [contra? #(contravened? % probe)]
+      (or (some contra? seen) (some contra? remainder)))))
 
 (defn all [& elements] (AllRecognizer. '() (to-recognizers elements) empty-status))
 
@@ -236,29 +236,29 @@
 (defrecord OneOfRecognizer [seen remainder status]
   Recognizer
   (transition [this probe]
-              (assert (not-ended? status))
-              (loop [sn seen, rmdr remainder, st status, targets remainder]
-                (if targets
-                  (let [target (first targets)             
-                        new-target (transition target probe)
-                        new-st (:status new-target)]
-                    (case (:value new-st)
-                          :complete
-                          (OneOfRecognizer. new-target
-                                            (remove #(= % target) rmdr)
-                                            new-st)
-                          ;; All sub patterns must become futile for this recognizer to
-                          ;; be futile. So update status and remainder, then iterate.
-                          :futile
-                          (recur nil
-                                 (replace {target new-target} rmdr)
-                                 new-st
-                                 (next targets))
-                          (recur nil
-                                 (replace {target new-target} rmdr)
-                                 (make-status :active nil (:finish probe))
-                                 (next targets))))
-                  (OneOfRecognizer. sn rmdr st))))
+    (assert (not-ended? status))
+    (loop [sn seen, rmdr remainder, st status, targets remainder]
+      (if targets
+        (let [target (first targets)             
+              new-target (transition target probe)
+              new-st (:status new-target)]
+          (case (:value new-st)
+                :complete
+                (OneOfRecognizer. new-target
+                                  (remove #(= % target) rmdr)
+                                  new-st)
+                ;; All sub patterns must become futile for this recognizer to
+                ;; be futile. So update status and remainder, then iterate.
+                :futile
+                (recur nil
+                       (replace {target new-target} rmdr)
+                       new-st
+                       (next targets))
+                (recur nil
+                       (replace {target new-target} rmdr)
+                       (make-status :active nil (:finish probe))
+                       (next targets))))
+        (OneOfRecognizer. sn rmdr st))))
 
   (recognized [this] (if seen (recognized seen) nil))
 
@@ -270,16 +270,16 @@
 (defrecord WithinRecognizer [target duration status]
   Recognizer
   (transition [this probe]
-              (assert (not-ended? status))
-              (let [new-target (transition target probe)
-                    new-status (:status new-target)
-                    {:keys [start finish]} new-status]
-                (WithinRecognizer. new-target
-                                   duration
-                                   (if (and (complete? new-status)
-                                            (> (- finish start) duration))
-                                     (assoc new-status :value :futile)
-                                     new-status))))
+    (assert (not-ended? status))
+    (let [new-target (transition target probe)
+          new-status (:status new-target)
+          {:keys [start finish]} new-status]
+      (WithinRecognizer. new-target
+                         duration
+                         (if (and (complete? new-status)
+                                  (> (- finish start) duration))
+                           (assoc new-status :value :futile)
+                           new-status))))
 
   (recognized [this] (if target (recognized target) nil))
 
@@ -293,17 +293,17 @@
 (defrecord WithoutRecognizer [target start finish status]
   Recognizer
   (transition [this probe]
-              (assert (not-ended? status))
-              (let [new-target (transition target probe)
-                    new-status (:status new-target)]
-                (WithoutRecognizer. new-target
-                                    start
-                                    finish
-                                    (if (and (complete? new-status)
-                                             (not (or (> (:start new-status) finish)
-                                                      (< (:finish new-status) start))))
-                                      (assoc new-status :value :futile)
-                                      new-status))))
+    (assert (not-ended? status))
+    (let [new-target (transition target probe)
+          new-status (:status new-target)]
+      (WithoutRecognizer. new-target
+                          start
+                          finish
+                          (if (and (complete? new-status)
+                                   (not (or (> (:start new-status) finish)
+                                            (< (:finish new-status) start))))
+                            (assoc new-status :value :futile)
+                            new-status))))
 
   (recognized [this] (if target (recognized target) nil))
 
